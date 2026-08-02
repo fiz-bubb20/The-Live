@@ -1,0 +1,2378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>The Line — Pick'em League</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/svg+xml" href="icon.svg">
+<link rel="apple-touch-icon" href="icon.svg">
+<meta name="theme-color" content="#0b1a36">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="The Line">
+<style>
+  :root{
+    --navy-950:#060f24;
+    --navy-900:#0b1a36;
+    --navy-800:#122748;
+    --navy-700:#1b3660;
+    --navy-650:#20406f;
+    --line:#24406e;
+    --ink:#eef4fb;
+    --ink-dim:#8ea3c7;
+    --ink-faint:#5c7099;
+    --accent:#57c7ff;
+    --accent-dim:rgba(87,199,255,.14);
+    --accent-2:#9fe0ff;
+    --win:#34d399;
+    --loss:#fb7185;
+    --push:#fbbf24;
+    --gold:#eab308;
+    --radius:14px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:radial-gradient(120% 100% at 50% 0%, #0d1f42 0%, var(--navy-950) 55%);
+    color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    min-height:100vh;
+    -webkit-font-smoothing:antialiased;
+  }
+  .shell{max-width:480px;margin:0 auto;min-height:100vh;position:relative;display:flex;flex-direction:column;}
+  ::selection{background:var(--accent-dim);color:var(--accent-2);}
+  a{color:var(--accent);}
+  button{font-family:inherit;}
+  input,select{font-family:inherit;}
+  h1,h2,h3{text-wrap:balance;margin:0;}
+  .hidden{display:none !important;}
+
+  /* ---------- generic bits ---------- */
+  .eyebrow{font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-faint);}
+  .field{display:flex;flex-direction:column;gap:6px;margin-bottom:14px;}
+  .field label{font-size:12px;font-weight:700;letter-spacing:.03em;color:var(--ink-dim);text-transform:uppercase;}
+  .field input,.field select{
+    background:var(--navy-700);border:1px solid var(--line);color:var(--ink);
+    border-radius:10px;padding:12px 13px;font-size:15.5px;outline:none;
+    transition:border-color .15s, box-shadow .15s;
+  }
+  .field input::placeholder{color:var(--ink-faint);}
+  .week-select{background:var(--navy-800);border:1px solid var(--line);color:var(--ink);border-radius:10px;padding:8px 10px;font-size:17px;font-weight:900;outline:none;}
+  .recap-inline-divider{border-top:1px dashed var(--line);margin:20px 0 14px;padding-top:16px;}
+  .recap-inline-title{font-size:13px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:10px;}
+  .field input:focus,.field select:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-dim);}
+  .btn{
+    display:inline-flex;align-items:center;justify-content:center;gap:8px;
+    border:none;border-radius:11px;padding:13px 18px;font-size:15px;font-weight:800;
+    letter-spacing:.02em;cursor:pointer;width:100%;transition:transform .08s, opacity .15s, background .15s;
+  }
+  .btn:active{transform:scale(.98);}
+  .btn-primary{background:linear-gradient(180deg,var(--accent-2),var(--accent));color:#04101f;box-shadow:0 6px 18px rgba(87,199,255,.28);}
+  .btn-primary:disabled{opacity:.5;cursor:not-allowed;}
+  .btn-ghost{background:var(--navy-700);color:var(--ink);border:1px solid var(--line);}
+  .btn-outline-accent{background:transparent;color:var(--accent);border:1.5px solid var(--accent);}
+  .btn-danger{background:transparent;color:var(--loss);border:1px solid rgba(251,113,133,.4);}
+  .btn-sm{padding:9px 14px;font-size:13px;width:auto;}
+  .link-btn{background:none;border:none;color:var(--accent);font-weight:700;cursor:pointer;font-size:14px;padding:4px;}
+  .divider{height:1px;background:var(--line);margin:18px 0;}
+  .muted{color:var(--ink-dim);font-size:13.5px;line-height:1.5;}
+  .error-msg{color:var(--loss);font-size:13px;font-weight:600;min-height:16px;margin-top:-6px;margin-bottom:10px;}
+
+  /* ---------- auth ---------- */
+  #authScreen{flex:1;display:flex;flex-direction:column;justify-content:center;padding:32px 24px;}
+  .brand{text-align:center;margin-bottom:34px;}
+  .brand-mark{width:72px;height:72px;margin:0 auto 14px;position:relative;}
+  .brand h1{font-size:26px;font-weight:900;letter-spacing:-.01em;}
+  .brand p{color:var(--ink-dim);font-size:13.5px;margin-top:4px;}
+  .authcard{background:var(--navy-800);border:1px solid var(--line);border-radius:18px;padding:24px 22px;}
+  .authtabs{display:flex;background:var(--navy-900);border-radius:11px;padding:4px;margin-bottom:22px;}
+  .authtab{flex:1;text-align:center;padding:9px;border-radius:8px;font-weight:800;font-size:13.5px;color:var(--ink-dim);cursor:pointer;letter-spacing:.02em;}
+  .authtab.active{background:var(--accent);color:#04101f;}
+  .team-picker-row{display:flex;align-items:center;gap:10px;background:var(--navy-700);border:1px solid var(--line);border-radius:10px;padding:9px 11px;}
+  .team-picker-row img,.team-picker-row .badge-fallback{width:26px;height:26px;flex-shrink:0;}
+  .team-picker-row input{flex:1;background:none;border:none;color:var(--ink);font-size:15px;outline:none;padding:3px 0;}
+
+  /* ---------- badges / logos ---------- */
+  .badge{border-radius:999px;object-fit:contain;background:var(--navy-900);flex-shrink:0;}
+  .badge-fallback{
+    border-radius:999px;display:flex;align-items:center;justify-content:center;
+    font-weight:900;color:#fff;flex-shrink:0;letter-spacing:-.02em;
+  }
+
+  /* ---------- leagues screen ---------- */
+  #leaguesScreen{flex:1;padding:22px 20px 40px;}
+  .topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:22px;}
+  .topbar .who{font-size:13px;color:var(--ink-dim);}
+  .topbar .who b{color:var(--ink);}
+  .icon-btn{background:var(--navy-800);border:1px solid var(--line);border-radius:10px;width:38px;height:38px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--ink-dim);}
+  .icon-btn:disabled{opacity:.3;cursor:default;}
+  .icon-btn:hover{color:var(--accent);border-color:var(--accent);}
+  .section-title{font-size:19px;font-weight:900;margin-bottom:12px;letter-spacing:-.01em;}
+  .league-card{
+    background:var(--navy-800);border:1px solid var(--line);border-radius:16px;padding:16px 17px;margin-bottom:12px;
+    display:flex;align-items:center;justify-content:space-between;cursor:pointer;transition:border-color .15s;
+  }
+  .league-card:hover{border-color:var(--accent);}
+  .league-card .name{font-weight:800;font-size:15.5px;}
+  .league-card .meta{color:var(--ink-dim);font-size:12.5px;margin-top:3px;}
+  .commish-chip{background:var(--accent-dim);color:var(--accent-2);font-size:10.5px;font-weight:800;padding:3px 8px;border-radius:999px;letter-spacing:.04em;text-transform:uppercase;}
+  .empty-hint{color:var(--ink-faint);font-size:13.5px;text-align:center;padding:24px 10px;}
+  .cta-row{display:flex;gap:10px;margin-top:18px;}
+  .modal-backdrop{position:fixed;inset:0;background:rgba(3,8,20,.65);backdrop-filter:blur(2px);display:flex;align-items:flex-end;justify-content:center;z-index:50;}
+  .modal-backdrop.center{align-items:center;padding:20px;}
+  .modal-sheet{
+    background:var(--navy-800);border:1px solid var(--line);border-top-left-radius:20px;border-top-right-radius:20px;
+    width:100%;max-width:480px;padding:22px 20px 28px;max-height:88vh;overflow-y:auto;
+  }
+  .modal-backdrop.center .modal-sheet{border-radius:18px;}
+  .modal-title{font-size:18px;font-weight:900;margin-bottom:16px;}
+  .modal-handle{width:36px;height:4px;background:var(--line);border-radius:99px;margin:0 auto 16px;}
+
+  /* ---------- app shell ---------- */
+  #appScreen{flex:1;display:flex;flex-direction:column;padding-bottom:78px;}
+  .app-header{
+    position:sticky;top:0;z-index:10;background:rgba(11,26,54,.92);backdrop-filter:blur(10px);
+    border-bottom:1px solid var(--line);padding:14px 18px;display:flex;align-items:center;justify-content:space-between;
+  }
+  .league-switch{display:flex;align-items:center;gap:8px;cursor:pointer;}
+  .league-switch .lname{font-weight:900;font-size:16px;}
+  .league-switch svg{color:var(--ink-faint);}
+  .user-chip{display:flex;align-items:center;gap:8px;cursor:pointer;}
+  .user-chip .uname{color:var(--accent);font-weight:800;font-size:13.5px;}
+  .avatar{width:30px;height:30px;border-radius:999px;background:var(--accent-dim);color:var(--accent-2);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:12.5px;border:1.5px solid var(--accent);}
+
+  .tab-content{flex:1;padding:18px 18px 10px;transition:transform .2s ease;touch-action:pan-y;}
+  .week-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;}
+  .week-header h2{font-size:20px;font-weight:900;}
+  .lock-pill{font-size:11.5px;font-weight:800;padding:5px 10px;border-radius:999px;background:var(--navy-800);border:1px solid var(--line);color:var(--ink-dim);}
+  .lock-pill.soon{color:var(--push);border-color:rgba(251,191,36,.4);}
+  .lock-pill.locked{color:var(--loss);border-color:rgba(251,113,133,.4);}
+
+  /* ---------- game ticket cards ---------- */
+  .ticket{
+    background:var(--navy-800);border:1px solid var(--line);border-radius:16px;margin-bottom:14px;overflow:hidden;position:relative;
+    transition:border-color .15s, box-shadow .15s;
+  }
+  .ticket.commish-edit{border-color:var(--gold);box-shadow:0 0 0 1px var(--gold) inset, 0 0 16px rgba(234,179,8,.22);}
+
+  .commish-mode-toggle{
+    display:flex;align-items:center;justify-content:space-between;background:var(--navy-800);border:1.5px solid var(--line);
+    border-radius:13px;padding:12px 15px;margin-bottom:14px;cursor:pointer;font-weight:800;font-size:13.5px;color:var(--ink-dim);
+    transition:border-color .15s, color .15s;
+  }
+  .commish-mode-toggle.on{border-color:var(--gold);color:var(--gold);box-shadow:0 0 14px rgba(234,179,8,.15);}
+  .commish-mode-toggle .cm-hint{font-weight:600;font-size:11px;color:var(--ink-faint);margin-top:2px;}
+  .cm-switch{width:42px;height:25px;border-radius:99px;background:var(--navy-700);position:relative;flex-shrink:0;transition:background .15s;}
+  .cm-switch .cm-knob{position:absolute;top:3px;left:3px;width:19px;height:19px;border-radius:50%;background:var(--ink-dim);transition:transform .15s, background .15s;}
+  .cm-switch.on{background:rgba(234,179,8,.22);}
+  .cm-switch.on .cm-knob{transform:translateX(17px);background:var(--gold);}
+  .ticket-top{padding:13px 16px 8px;display:flex;align-items:center;justify-content:space-between;}
+  .kickoff-txt{font-size:11.5px;color:var(--ink-faint);font-weight:700;letter-spacing:.02em;}
+  .status-chip{font-size:10px;font-weight:900;letter-spacing:.06em;text-transform:uppercase;padding:3px 8px;border-radius:999px;}
+  .status-chip.scheduled{background:var(--navy-700);color:var(--ink-dim);}
+  .status-chip.live{background:rgba(251,113,133,.15);color:var(--loss);}
+  .status-chip.live::before{content:"";display:inline-block;width:6px;height:6px;border-radius:99px;background:var(--loss);margin-right:5px;animation:pulse-dot 1.2s infinite;}
+  .status-chip.final{background:rgba(52,211,153,.14);color:var(--win);}
+  @keyframes pulse-dot{0%,100%{opacity:1;}50%{opacity:.25;}}
+  .matchup{display:flex;align-items:stretch;padding:4px 10px 14px;}
+  .team-side{flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;padding:6px 8px;}
+  .team-side img,.team-side .badge-fallback{width:48px;height:48px;font-size:16px;}
+  .team-name{font-size:13px;font-weight:800;text-align:center;line-height:1.2;}
+  .home-tag{font-size:8.5px;font-weight:800;letter-spacing:.04em;color:var(--ink-faint);background:var(--navy-700);border-radius:4px;padding:1px 4px;vertical-align:middle;}
+  .rank-tag{font-size:8.5px;font-weight:900;letter-spacing:.02em;color:#04101f;background:var(--accent);border-radius:4px;padding:1px 4px;vertical-align:middle;}
+
+  .recap-game{background:var(--navy-800);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:10px;}
+  .recap-kickoff{font-size:11px;color:var(--ink-faint);font-weight:700;margin-bottom:10px;}
+  .recap-matchup{display:flex;gap:10px;}
+  .recap-team{flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;padding:10px 6px;border-radius:10px;border:1.5px solid var(--line);}
+  .recap-team.recap-cover{background:rgba(52,211,153,.1);border-color:var(--win);}
+  .recap-team.recap-nocover{opacity:.5;}
+  .recap-team.recap-push{background:rgba(251,191,36,.12);border-color:var(--push);}
+  .recap-team-name{font-size:12px;font-weight:800;text-align:center;line-height:1.2;}
+  .recap-score{font-size:17px;font-weight:900;font-variant-numeric:tabular-nums;}
+  .who-picked-row{display:flex;gap:8px;padding:0 14px 14px;}
+  .who-picked-side{flex:1;min-width:0;background:var(--navy-800,var(--navy-700));border:1px solid var(--line);border-radius:10px;padding:6px 6px 8px;text-align:center;}
+  .who-picked-label{font-size:10px;color:var(--ink-faint);font-weight:700;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .mini-avatar-row{display:flex;flex-wrap:wrap;gap:3px;justify-content:center;min-height:18px;margin-top:2px;}
+  .mini-avatar{width:19px;height:19px;border-radius:99px;background:var(--accent-dim);color:var(--accent-2);font-size:8px;font-weight:900;display:flex;align-items:center;justify-content:center;border:1px solid var(--accent);flex-shrink:0;}
+  .recap-none{font-size:9px;color:var(--ink-faint);}
+  .recap-push-tag{text-align:center;font-size:11px;font-weight:800;color:var(--push);letter-spacing:.03em;margin-top:10px;}
+  .team-spread{font-size:11.5px;color:var(--ink-dim);font-weight:700;}
+  .vs-col{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:0 4px;min-width:46px;}
+  .vs-txt{font-size:10.5px;color:var(--ink-faint);font-weight:800;}
+  .score-txt{font-size:22px;font-weight:900;font-variant-numeric:tabular-nums;}
+  .pick-row{display:flex;gap:8px;padding:0 14px 14px;}
+  .pick-btn{
+    flex:1;min-width:0;background:var(--navy-700);border:1.5px solid var(--line);border-radius:11px;padding:10px 8px;
+    display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;color:var(--ink);
+  }
+  .pick-btn .pk-name{font-size:12px;font-weight:800;}
+  .pick-btn .pk-spread{font-size:11px;color:var(--ink-dim);font-weight:700;}
+  .pick-btn.selected{border-color:var(--accent);background:var(--accent-dim);box-shadow:0 0 0 1px var(--accent) inset;}
+  .pick-btn.selected .pk-name,.pick-btn.selected .pk-spread{color:var(--accent-2);}
+  .pick-btn.disabled{opacity:.55;cursor:default;}
+  .pick-btn.not-chosen{opacity:.4;}
+  .pick-btn.pick-win{border-color:var(--win);background:rgba(52,211,153,.12);box-shadow:0 0 0 1px var(--win) inset;}
+  .pick-btn.pick-win .pk-name,.pick-btn.pick-win .pk-spread{color:var(--win);}
+  .pick-btn.pick-loss{border-color:var(--loss);background:rgba(251,113,133,.1);box-shadow:0 0 0 1px var(--loss) inset;}
+  .pick-btn.pick-loss .pk-name,.pick-btn.pick-loss .pk-spread{color:var(--loss);}
+  .pick-btn.pick-push{border-color:var(--push);box-shadow:0 0 0 1px var(--push) inset;}
+  .pick-btn.pick-push .pk-name,.pick-btn.pick-push .pk-spread{color:var(--push);}
+  .locked-banner{padding:0 16px 14px;font-size:11.5px;color:var(--ink-faint);font-weight:700;text-align:center;}
+  .cover-banner{padding:0 16px 14px;text-align:center;font-size:12.5px;font-weight:800;}
+  .cover-banner.win{color:var(--win);}
+  .cover-banner.loss{color:var(--loss);}
+  .cover-banner.push{color:var(--push);}
+
+  /* commissioner controls inline */
+  .commish-panel{background:var(--navy-900);border-top:1px solid var(--line);padding:12px 16px 16px;}
+  .commish-panel .row{display:flex;gap:8px;margin-bottom:8px;}
+  .commish-panel input{flex:1;min-width:0;width:0;background:var(--navy-700);border:1px solid var(--line);color:var(--ink);border-radius:8px;padding:8px 10px;font-size:13px;}
+  .status-btns{display:flex;gap:6px;}
+  .status-btns button{flex:1;min-width:0;font-size:11px;font-weight:800;padding:7px;border-radius:7px;border:1px solid var(--line);background:var(--navy-700);color:var(--ink-dim);cursor:pointer;}
+  .status-btns button.active{background:var(--accent);color:#04101f;border-color:var(--accent);}
+
+  .add-game-card{border:1.5px dashed var(--line);border-radius:16px;padding:16px;margin-bottom:14px;background:var(--navy-800);}
+  .add-game-card h3{font-size:13.5px;font-weight:800;margin-bottom:12px;color:var(--accent);}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .grid2 > *{min-width:0;}
+  .grid2 input{width:100%;}
+
+  /* ---------- leaderboard ---------- */
+  .lb-row{display:flex;align-items:center;gap:12px;background:var(--navy-800);border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin-bottom:9px;}
+  .lb-row.me{border-color:var(--accent);background:var(--accent-dim);}
+  .lb-rank{font-size:15px;font-weight:900;color:var(--ink-faint);width:22px;text-align:center;}
+  .lb-row.me .lb-rank{color:var(--accent);}
+  .lb-fav{width:34px;height:34px;flex-shrink:0;}
+  .lb-info{flex:1;min-width:0;}
+  .lb-name{font-weight:800;font-size:14.5px;}
+  .lb-row.me .lb-name{color:var(--accent-2);}
+  .lb-sub{font-size:11.5px;color:var(--ink-faint);margin-top:1px;}
+  .lb-record{text-align:right;}
+  .lb-pct{font-weight:900;font-size:15px;font-variant-numeric:tabular-nums;}
+  .lb-wl{font-size:11px;color:var(--ink-dim);font-variant-numeric:tabular-nums;}
+  .podium-row{display:flex;align-items:flex-end;justify-content:center;gap:10px;margin-bottom:22px;padding:0 6px;}
+  .podium-slot{flex:1;text-align:center;display:flex;flex-direction:column;align-items:center;}
+  .podium-slot .pav{width:44px;height:44px;border-radius:999px;margin-bottom:8px;}
+  .podium-slot .pname{font-size:12px;font-weight:800;margin-bottom:6px;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .podium-bar{width:100%;border-radius:8px 8px 0 0;display:flex;align-items:flex-start;justify-content:center;padding-top:8px;font-weight:900;font-size:13px;}
+  .podium-slot.gold .podium-bar{height:76px;background:linear-gradient(180deg,var(--accent-2),var(--accent));color:#04101f;}
+  .podium-slot.silver .podium-bar{height:56px;background:var(--navy-700);border:1px solid var(--line);color:var(--ink);}
+  .podium-slot.bronze .podium-bar{height:40px;background:var(--navy-700);border:1px solid var(--line);color:var(--ink-dim);}
+
+  /* ---------- bottom nav ---------- */
+  .bottom-nav{
+    position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;
+    background:rgba(11,26,54,.94);backdrop-filter:blur(12px);border-top:1px solid var(--line);
+    display:flex;padding:8px 14px calc(10px + env(safe-area-inset-bottom));z-index:20;
+  }
+  .nav-btn{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;background:none;border:none;color:var(--ink-faint);cursor:pointer;padding:6px 4px;border-radius:12px;position:relative;}
+  .nav-btn .nav-label{font-size:10.5px;font-weight:800;letter-spacing:.02em;}
+  .nav-btn.active{color:var(--accent);background:var(--accent-dim);}
+  .nav-btn .live-dot{position:absolute;top:2px;right:26%;width:8px;height:8px;background:var(--loss);border-radius:99px;box-shadow:0 0 0 2px var(--navy-900);animation:pulse-dot 1.2s infinite;}
+
+  /* ---------- settings sheet ---------- */
+  .settings-section{margin-bottom:20px;}
+  .settings-section h4{font-size:11.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:10px;}
+  .code-display{display:flex;align-items:center;justify-content:space-between;background:var(--navy-900);border:1px dashed var(--line);border-radius:10px;padding:12px 14px;}
+  .code-display .code{font-size:20px;font-weight:900;letter-spacing:.1em;font-variant-numeric:tabular-nums;}
+  .settings-list-item{display:flex;align-items:center;justify-content:space-between;padding:12px 2px;border-bottom:1px solid var(--line);font-size:14.5px;font-weight:700;cursor:pointer;}
+  .settings-list-item:last-child{border-bottom:none;}
+  .settings-list-item.danger{color:var(--loss);}
+
+  .toast{position:fixed;bottom:96px;left:50%;transform:translateX(-50%);background:var(--navy-700);border:1px solid var(--accent);color:var(--ink);padding:11px 18px;border-radius:99px;font-size:13.5px;font-weight:700;z-index:100;box-shadow:0 8px 24px rgba(0,0,0,.4);max-width:88%;text-align:center;}
+
+  @media (max-width:360px){
+    .team-side img,.team-side .badge-fallback{width:40px;height:40px;}
+  }
+</style>
+</head>
+<body>
+<div class="shell" id="shell">
+
+  <!-- ============ AUTH ============ -->
+  <div id="authScreen">
+    <div class="brand">
+      <div class="brand-mark">
+        <svg width="72" height="72" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg" style="filter:drop-shadow(0 0 18px rgba(87,199,255,.4))">
+          <defs>
+            <linearGradient id="dgA" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#9fe0ff" stop-opacity="0.55"/>
+              <stop offset="100%" stop-color="#57c7ff" stop-opacity="0.05"/>
+            </linearGradient>
+            <linearGradient id="dgB" x1="100%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stop-color="#57c7ff" stop-opacity="0.5"/>
+              <stop offset="100%" stop-color="#9fe0ff" stop-opacity="0.05"/>
+            </linearGradient>
+          </defs>
+          <path d="M60 22 L98 60 L60 98 L22 60 Z" fill="none" stroke="#57c7ff" stroke-width="1.2" opacity="0.25" transform="rotate(12 60 60)"/>
+          <path d="M60 18 L102 60 L60 102 L18 60 Z" fill="none" stroke="#57c7ff" stroke-width="1.2" opacity="0.35" transform="rotate(-8 60 60)"/>
+          <path d="M60 10 L60 60 L10 60 Z" fill="url(#dgA)"/>
+          <path d="M60 10 L110 60 L60 60 Z" fill="url(#dgB)"/>
+          <path d="M60 60 L110 60 L60 110 Z" fill="url(#dgA)" opacity="0.6"/>
+          <path d="M60 60 L60 110 L10 60 Z" fill="url(#dgB)" opacity="0.6"/>
+          <path d="M60 10 L110 60 L60 110 L10 60 Z" fill="none" stroke="#9fe0ff" stroke-width="3"/>
+          <text x="60" y="68" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-weight="900" font-size="24" fill="#eef4fb" letter-spacing="-1">847</text>
+        </svg>
+      </div>
+      <h1>The Line</h1>
+      <p>Private pick'em for your crew</p>
+    </div>
+    <div class="authcard">
+      <div class="authtabs">
+        <div class="authtab active" id="tabSignIn" onclick="setAuthMode('signin')">Sign In</div>
+        <div class="authtab" id="tabSignUp" onclick="setAuthMode('signup')">Sign Up</div>
+      </div>
+
+      <div id="signInForm">
+        <div class="field"><label>Phone Number</label><input id="siPhone" type="tel" placeholder="(555) 555-0100" inputmode="numeric" oninput="onPhoneInput(this)"></div>
+        <div class="field"><label>Password</label><input id="siPassword" type="password" placeholder="••••••••"></div>
+        <label style="display:flex;align-items:center;gap:8px;margin-bottom:16px;cursor:pointer;font-size:13px;color:var(--ink-dim);font-weight:600">
+          <input type="checkbox" id="siRemember" checked style="width:16px;height:16px;accent-color:var(--accent)">Remember me on this device
+        </label>
+        <div class="error-msg" id="siError"></div>
+        <button class="btn btn-primary" onclick="doSignIn()">Sign In</button>
+      </div>
+
+      <div id="signUpForm" class="hidden">
+        <div class="field"><label>Your Name</label><input id="suName" type="text" placeholder="Full name" maxlength="40"></div>
+        <div class="field"><label>Phone Number</label><input id="suPhone" type="tel" placeholder="(555) 555-0100" inputmode="numeric" oninput="onPhoneInput(this)"></div>
+        <div class="field"><label>Password</label><input id="suPassword" type="password" placeholder="Choose a password"></div>
+        <div class="field">
+          <label>Favorite Team</label>
+          <div class="team-picker-row">
+            <div id="suTeamBadge"></div>
+            <input id="suTeam" type="text" list="teamsList" placeholder="Start typing your team…" autocomplete="off" oninput="onTeamTyped()">
+          </div>
+        </div>
+        <datalist id="teamsList"></datalist>
+        <label style="display:flex;align-items:center;gap:8px;margin-bottom:16px;cursor:pointer;font-size:13px;color:var(--ink-dim);font-weight:600">
+          <input type="checkbox" id="suRemember" checked style="width:16px;height:16px;accent-color:var(--accent)">Remember me on this device
+        </label>
+        <div class="error-msg" id="suError"></div>
+        <button class="btn btn-primary" onclick="doSignUp()">Create Account</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ MY LEAGUES ============ -->
+  <div id="leaguesScreen" class="hidden">
+    <div class="topbar">
+      <div class="who">Signed in as<br><b id="lgUserName">—</b></div>
+      <div class="icon-btn" onclick="signOut()" title="Sign out">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      </div>
+    </div>
+    <div class="section-title">Your Leagues</div>
+    <div id="leaguesList"></div>
+    <div class="cta-row">
+      <button class="btn btn-primary" onclick="openModal('createLeagueModal')">Create League</button>
+      <button class="btn btn-ghost" onclick="openModal('joinLeagueModal')">Join League</button>
+    </div>
+  </div>
+
+  <!-- ============ MAIN APP ============ -->
+  <div id="appScreen" class="hidden">
+    <div class="app-header">
+      <div class="league-switch" onclick="goToLeagues()">
+        <span class="lname" id="hdrLeagueName">League</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </div>
+      <div class="user-chip" onclick="openSettings()">
+        <span class="uname" id="hdrUserName">You</span>
+        <div class="avatar" id="hdrAvatar">?</div>
+      </div>
+    </div>
+
+    <div class="tab-content" id="tabContent"></div>
+
+    <div class="bottom-nav">
+      <button class="nav-btn active" id="navPicks" onclick="switchTab('picks')">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><rect x="6.5" y="6.5" width="11" height="11" rx="1.5" transform="rotate(45 12 12)"/></svg>
+        <span class="nav-label">Picks</span>
+      </button>
+      <button class="nav-btn" id="navLive" onclick="switchTab('live')">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12h4l2 8 4-16 3 12 2-4h5"/></svg>
+        <span class="nav-label">Live</span>
+        <span class="live-dot hidden" id="liveDot"></span>
+      </button>
+      <button class="nav-btn" id="navBoard" onclick="switchTab('board')">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21V13M12 21V9M20 21V15M2 21h20"/><circle cx="12" cy="5" r="2.4"/></svg>
+        <span class="nav-label">Leaderboard</span>
+      </button>
+    </div>
+  </div>
+
+  <div id="modalRoot"></div>
+  <div id="toastRoot"></div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
+/* =========================================================================
+   CONFIG — replace with your own Firebase project config (see README.md)
+   ========================================================================= */
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyByu-AdKqh8O2SQuO_pI8Rvmd2VFyQUMTo",
+  authDomain: "the-line-585f3.firebaseapp.com",
+  projectId: "the-line-585f3",
+  storageBucket: "the-line-585f3.firebasestorage.app",
+  messagingSenderId: "243134663000",
+  appId: "1:243134663000:web:781d87a4b7421f2b263d2d"
+};
+const DOC_PATH = ["pickem", "league_data"]; // collection, doc id
+
+let fbApp=null, fbDb=null, docRef=null, unsub=null;
+let DB = { users:{}, leagues:{} };
+let DB_READY = false;
+
+function initFirebase(){
+  if(FIREBASE_CONFIG.apiKey === "REPLACE_ME"){
+    showToast("⚠️ Firebase not configured yet — see README.md");
+    return;
+  }
+  fbApp = firebase.initializeApp(FIREBASE_CONFIG);
+  fbDb = firebase.firestore();
+  docRef = fbDb.collection(DOC_PATH[0]).doc(DOC_PATH[1]);
+  refreshFromServer();
+}
+
+// No live/continuous listener on purpose — this app only pulls fresh data from the server at
+// specific moments (app open, a manual refresh, a game's kickoff, or its Wednesday spread
+// reveal), not constantly in the background. See checkScheduledRefresh() for the timed triggers.
+async function refreshFromServer(){
+  if(!docRef) return;
+  try{
+    const snap = await docRef.get();
+    if(!snap.exists){
+      await docRef.set({ users:{}, leagues:{} });
+      DB = { users:{}, leagues:{} };
+    } else {
+      DB = snap.data() || { users:{}, leagues:{} };
+      DB.users = DB.users || {};
+      DB.leagues = DB.leagues || {};
+    }
+    DB_READY = true;
+    onDbUpdate();
+  } catch(err){
+    console.error(err);
+    showToast("Connection error — check Firestore rules");
+  }
+}
+
+// Safe read-modify-write. mutator receives a deep-cloned draft of DB and mutates it in place.
+// Applies the same write locally right after it lands on the server, so the acting user always
+// sees their own action immediately without waiting on any listener or refresh trigger.
+async function mutate(mutator){
+  if(!docRef) return;
+  await fbDb.runTransaction(async (tx)=>{
+    const snap = await tx.get(docRef);
+    const draft = snap.exists ? snap.data() : { users:{}, leagues:{} };
+    draft.users = draft.users || {};
+    draft.leagues = draft.leagues || {};
+    mutator(draft);
+    tx.set(docRef, draft);
+  });
+}
+
+/* =========================================================================
+   TEAMS DATA
+   ========================================================================= */
+const TEAMS = [{"n":"Air Force","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/2005.png","c":"003594","ac":"ffffff"},{"n":"Akron","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/2006.png","c":"041e42","ac":"c5b783"},{"n":"Alabama","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/333.png","c":"9e1b32","ac":"ffffff"},{"n":"Appalachian State","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/2026.png","c":"000000","ac":"ffcc00"},{"n":"Arizona","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/12.png","c":"cc0033","ac":"003366"},{"n":"Arizona State","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/9.png","c":"ffc627","ac":"8c1d40"},{"n":"Arkansas","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/8.png","c":"a32136","ac":"ffffff"},{"n":"Arkansas State","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/2032.png","c":"cc092f","ac":"000000"},{"n":"Auburn","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/2.png","c":"002b5c","ac":"f26522"},{"n":"Ball State","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/2050.png","c":"ba0c2f","ac":"ffffff"},{"n":"Baylor","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/239.png","c":"154734","ac":"ffb81c"},{"n":"Boise State","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/68.png","c":"0033a0","ac":"d64309"},{"n":"Boston College","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/103.png","c":"8c2232","ac":"dbcca6"},{"n":"Bowling Green","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/189.png","c":"fd5000","ac":"4f2c1d"},{"n":"Buffalo","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/2084.png","c":"005bbb","ac":"ffffff"},{"n":"BYU","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/252.png","c":"0047ba","ac":"002e5d"},{"n":"California","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/25.png","c":"041e42","ac":"ffc72c"},{"n":"Central Michigan","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/2117.png","c":"4c0027","ac":"fbab18"},{"n":"Charlotte","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/2429.png","c":"005035","ac":"a49665"},{"n":"Cincinnati","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/2132.png","c":"000000","ac":"e00122"},{"n":"Clemson","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/228.png","c":"f56600","ac":"ffffff"},{"n":"Coastal Carolina","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/324.png","c":"006f71","ac":"a27752"},{"n":"Colorado","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/38.png","c":"cfb87c","ac":"000000"},{"n":"Colorado State","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/36.png","c":"004c23","ac":"c8c372"},{"n":"Delaware","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/48.png","c":"00539f","ac":"ffd200"},{"n":"Duke","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/150.png","c":"00539b","ac":"ffffff"},{"n":"East Carolina","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/151.png","c":"582c83","ac":"ffc72c"},{"n":"Eastern Michigan","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/2199.png","c":"006938","ac":"ffffff"},{"n":"FIU","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/2229.png","c":"091f3f","ac":"c3993f"},{"n":"Florida","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/57.png","c":"0021a5","ac":"fa4616"},{"n":"Florida Atlantic","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/2226.png","c":"003366","ac":"cc0000"},{"n":"Florida State","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/52.png","c":"782f40","ac":"ceb888"},{"n":"Fresno State","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/278.png","c":"b1102b","ac":"13284c"},{"n":"Georgia","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/61.png","c":"ba0c2f","ac":"2c2a29"},{"n":"Georgia Southern","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/290.png","c":"041e42","ac":"a3aaae"},{"n":"Georgia State","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/2247.png","c":"0039a6","ac":"ffffff"},{"n":"Georgia Tech","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/59.png","c":"b3a369","ac":"ffffff"},{"n":"Hawai'i","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/62.png","c":"005737","ac":"000000"},{"n":"Houston","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/248.png","c":"c8102e","ac":"ffffff"},{"n":"Illinois","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/356.png","c":"ff5f05","ac":"13294b"},{"n":"Indiana","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/84.png","c":"970310","ac":"ffffff"},{"n":"Iowa","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/2294.png","c":"231f20","ac":"fcd116"},{"n":"Iowa State","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/66.png","c":"ae192d","ac":"ffc72a"},{"n":"Jacksonville State","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/55.png","c":"cc0000","ac":"000000"},{"n":"James Madison","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/256.png","c":"450084","ac":"cbb677"},{"n":"Kansas","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/2305.png","c":"0051ba","ac":"e8000d"},{"n":"Kansas State","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/2306.png","c":"330a57","ac":"e2e3e4"},{"n":"Kennesaw State","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/338.png","c":"fdbb30","ac":"0b1315"},{"n":"Kent State","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/2309.png","c":"002664","ac":"eaab00"},{"n":"Kentucky","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/96.png","c":"0033a0","ac":"ffffff"},{"n":"Liberty","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/2335.png","c":"0a254e","ac":"b72025"},{"n":"Louisiana","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/309.png","c":"ce181e","ac":"000000"},{"n":"Louisiana Tech","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/2348.png","c":"003087","ac":"cb333b"},{"n":"Louisiana-Monroe","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/2433.png","c":"8a1a1a","ac":"ffffff"},{"n":"Louisville","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/97.png","c":"c9001f","ac":"ffffff"},{"n":"LSU","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/99.png","c":"461d76","ac":"fdd023"},{"n":"Marshall","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/276.png","c":"00b140","ac":"000000"},{"n":"Maryland","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/120.png","c":"ce1126","ac":"ffffff"},{"n":"Memphis","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/235.png","c":"004991","ac":"8e908f"},{"n":"Miami","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/2390.png","c":"f47423","ac":"035131"},{"n":"Miami (OH)","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/193.png","c":"c41230","ac":"ffffff"},{"n":"Michigan","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/130.png","c":"00274c","ac":"ffcb05"},{"n":"Michigan State","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/127.png","c":"173f35","ac":"ffffff"},{"n":"Middle Tennessee","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/2393.png","c":"036eb7","ac":"ffffff"},{"n":"Minnesota","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/135.png","c":"5e0a2f","ac":"fab41c"},{"n":"Mississippi State","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/344.png","c":"5d1725","ac":"c1c6c8"},{"n":"Missouri","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/142.png","c":"f1b82d","ac":"000000"},{"n":"Missouri State","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/2623.png","c":"5e0009","ac":"ffffff"},{"n":"Navy","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/2426.png","c":"00225b","ac":"b5a67c"},{"n":"NC State","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/152.png","c":"cc0000","ac":"ffffff"},{"n":"Nebraska","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/158.png","c":"e31937","ac":"ffffff"},{"n":"Nevada","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/2440.png","c":"041e42","ac":"8a8d8f"},{"n":"New Mexico","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/167.png","c":"ba0c2f","ac":"a7a8aa"},{"n":"New Mexico State","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/166.png","c":"7e141b","ac":"231f20"},{"n":"North Carolina","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/153.png","c":"7bafd4","ac":"13294b"},{"n":"North Texas","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/249.png","c":"068f33","ac":"ffffff"},{"n":"Northern Illinois","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/2459.png","c":"c8102e","ac":"000000"},{"n":"Northwestern","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/77.png","c":"492f92","ac":"ffffff"},{"n":"Notre Dame","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/87.png","c":"062340","ac":"c99700"},{"n":"Ohio","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/195.png","c":"154734","ac":"ffffff"},{"n":"Ohio State","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/194.png","c":"ba0c2f","ac":"a8adb4"},{"n":"Oklahoma","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/201.png","c":"990000","ac":"ffffff"},{"n":"Oklahoma State","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/197.png","c":"fe5c00","ac":"000000"},{"n":"Old Dominion","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/295.png","c":"003768","ac":"a1d2f1"},{"n":"Ole Miss","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/145.png","c":"13294b","ac":"cf142b"},{"n":"Oregon","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/2483.png","c":"00934b","ac":"fff41b"},{"n":"Oregon State","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/204.png","c":"dc4405","ac":"000000"},{"n":"Penn State","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/213.png","c":"061440","ac":"ffffff"},{"n":"Pittsburgh","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/221.png","c":"003594","ac":"ffb81c"},{"n":"Purdue","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/2509.png","c":"ceb888","ac":"000000"},{"n":"Rice","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/242.png","c":"00205b","ac":"c1c6c8"},{"n":"Rutgers","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/164.png","c":"ce0e2d","ac":"ffffff"},{"n":"Sam Houston","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/2534.png","c":"f56423","ac":"ffffff"},{"n":"San Diego State","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/21.png","c":"a6192e","ac":"000000"},{"n":"San Jose State","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/23.png","c":"0055a2","ac":"ffffff"},{"n":"SMU","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/2567.png","c":"a80000","ac":"0033a1"},{"n":"South Alabama","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/6.png","c":"00205b","ac":"bf0d3e"},{"n":"South Carolina","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/2579.png","c":"73000a","ac":"000000"},{"n":"South Florida","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/58.png","c":"006747","ac":"cfc493"},{"n":"Southern Miss","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/2572.png","c":"ffc72c","ac":"231f20"},{"n":"Stanford","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/24.png","c":"8c1515","ac":"ffffff"},{"n":"Syracuse","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/183.png","c":"000e54","ac":"ff431b"},{"n":"TCU","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/2628.png","c":"4d1979","ac":"ffffff"},{"n":"Temple","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/218.png","c":"a41e35","ac":"ffffff"},{"n":"Tennessee","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/2633.png","c":"ff8200","ac":"ffffff"},{"n":"Texas","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/251.png","c":"af5c37","ac":"ffffff"},{"n":"Texas A&M","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/245.png","c":"500000","ac":"ffffff"},{"n":"Texas State","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/326.png","c":"501214","ac":"6a5638"},{"n":"Texas Tech","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/2641.png","c":"da291c","ac":"000000"},{"n":"Toledo","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/2649.png","c":"0b2240","ac":"ffcd00"},{"n":"Troy","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/2653.png","c":"862633","ac":"b1b1b1"},{"n":"Tulane","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/2655.png","c":"006747","ac":"418fde"},{"n":"Tulsa","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/202.png","c":"003595","ac":"d0b787"},{"n":"UAB","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/5.png","c":"1a5632","ac":"fdb913"},{"n":"UCF","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/2116.png","c":"000000","ac":"b4a169"},{"n":"UCLA","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/26.png","c":"2774ae","ac":"f2a900"},{"n":"UConn","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/41.png","c":"0c2340","ac":"a2aaad"},{"n":"UMass","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/113.png","c":"881c1c","ac":"ffffff"},{"n":"UNLV","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/2439.png","c":"cf0a2c","ac":"cac8c8"},{"n":"USC","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/30.png","c":"9d2235","ac":"ffc72c"},{"n":"Utah","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/254.png","c":"be0000","ac":"ffffff"},{"n":"Utah State","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/328.png","c":"0f2439","ac":"ffffff"},{"n":"UTEP","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/2638.png","c":"ff8200","ac":"041e42"},{"n":"UTSA","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/2636.png","c":"0c2340","ac":"f15a22"},{"n":"Vanderbilt","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/238.png","c":"000000","ac":"cfae70"},{"n":"Virginia","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/258.png","c":"232d4b","ac":"f84c1e"},{"n":"Virginia Tech","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/259.png","c":"6a2c3e","ac":"cf4520"},{"n":"Wake Forest","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/154.png","c":"ceb888","ac":"2c2a29"},{"n":"Washington","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/264.png","c":"33006f","ac":"e8d3a2"},{"n":"Washington State","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/265.png","c":"a60f2d","ac":"4d4d4d"},{"n":"West Virginia","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/277.png","c":"eaaa00","ac":"002855"},{"n":"Western Kentucky","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/98.png","c":"e13a3e","ac":"ffffff"},{"n":"Western Michigan","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/2711.png","c":"532e1f","ac":"f1c500"},{"n":"Wisconsin","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/275.png","c":"a00000","ac":"ffffff"},{"n":"Wyoming","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/2751.png","c":"492f24","ac":"ffc425"}];
+const TEAM_BY_NAME = {};
+TEAMS.forEach(t=> TEAM_BY_NAME[t.n.toLowerCase()] = t);
+
+function findTeam(name){
+  if(!name) return null;
+  return TEAM_BY_NAME[name.trim().toLowerCase()] || null;
+}
+
+// Conference membership, used by the "Choose Conference" weekly selection mode.
+const CONFERENCE_GROUPS = {
+  "ACC": ["Boston College","California","Clemson","Duke","Florida State","Georgia Tech","Louisville","Miami","NC State","North Carolina","Pittsburgh","SMU","Stanford","Syracuse","Virginia","Virginia Tech","Wake Forest"],
+  "Big Ten": ["Illinois","Indiana","Iowa","Maryland","Michigan","Michigan State","Minnesota","Nebraska","Northwestern","Ohio State","Oregon","Penn State","Purdue","Rutgers","UCLA","USC","Washington","Wisconsin"],
+  "Big 12": ["Arizona","Arizona State","Baylor","BYU","Cincinnati","Colorado","Houston","Iowa State","Kansas","Kansas State","Oklahoma State","TCU","Texas Tech","UCF","Utah","West Virginia"],
+  "SEC": ["Alabama","Arkansas","Auburn","Florida","Georgia","Kentucky","LSU","Mississippi State","Missouri","Oklahoma","Ole Miss","South Carolina","Tennessee","Texas","Texas A&M","Vanderbilt"],
+  "Independent": ["Notre Dame","UConn","UMass","Washington State","Oregon State"],
+  "AAC": ["Charlotte","East Carolina","Florida Atlantic","Memphis","Navy","North Texas","Rice","South Florida","Temple","Tulane","Tulsa","UAB","UTSA"],
+  "C-USA": ["Delaware","FIU","Jacksonville State","Kennesaw State","Liberty","Louisiana Tech","Middle Tennessee","Missouri State","New Mexico State","Sam Houston","UTEP","Western Kentucky"],
+  "MAC": ["Akron","Ball State","Bowling Green","Buffalo","Central Michigan","Eastern Michigan","Kent State","Miami (OH)","Northern Illinois","Ohio","Toledo","Western Michigan"],
+  "Mountain West": ["Air Force","Boise State","Colorado State","Fresno State","Hawai'i","Nevada","New Mexico","San Diego State","San Jose State","UNLV","Utah State","Wyoming"],
+  "Sun Belt": ["Appalachian State","Arkansas State","Coastal Carolina","Georgia Southern","Georgia State","James Madison","Louisiana","Louisiana-Monroe","Marshall","Old Dominion","South Alabama","Southern Miss","Texas State","Troy"]
+};
+const CONFERENCE_OF = {};
+Object.entries(CONFERENCE_GROUPS).forEach(([conf, teams])=> teams.forEach(t=> CONFERENCE_OF[t]=conf));
+const P4_TEAMS = new Set([...CONFERENCE_GROUPS["ACC"], ...CONFERENCE_GROUPS["Big Ten"], ...CONFERENCE_GROUPS["Big 12"], ...CONFERENCE_GROUPS["SEC"]]);
+
+// Matches a live ESPN display name (e.g. "Ohio State Buckeyes") back to our curated team entry,
+// preferring the longest curated name contained in it (disambiguates e.g. "Miami" vs "Miami (OH)").
+function stripDiacritics(s){ return s.normalize("NFD").replace(/[̀-ͯ]/g,""); }
+// Requires whole-word boundaries (space or string edge) on both sides of the match, so a
+// different school that merely starts with the same word (e.g. "Arkansas-Pine Bluff" vs
+// our curated "Arkansas") is correctly rejected instead of misattributed.
+const TEAM_NAME_QUALIFIERS = ["western","eastern","northern","southern","north","south","east","west","central"];
+function matchLiveTeam(espnDisplayName){
+  if(!espnDisplayName) return null;
+  const lower = stripDiacritics(espnDisplayName.toLowerCase());
+  let best = null;
+  for(const t of TEAMS){
+    const needle = stripDiacritics(t.n.toLowerCase());
+    const idx = lower.indexOf(needle);
+    if(idx===-1) continue;
+    const before = idx===0 ? " " : lower[idx-1];
+    const afterIdx = idx+needle.length;
+    const after = afterIdx>=lower.length ? " " : lower[afterIdx];
+    if(before!==" " || after!==" ") continue;
+    // Reject curated "Illinois" matching inside "Western Illinois ..." (a different school)
+    // unless the curated entry itself already starts with that qualifier (e.g. "Western Michigan").
+    if(idx>0){
+      const prevWord = lower.slice(0, idx).trimEnd().split(/\s+/).pop();
+      if(TEAM_NAME_QUALIFIERS.includes(prevWord) && !needle.startsWith(prevWord+" ")) continue;
+    }
+    // Reject curated "Illinois" matching "Illinois State ..." (a different school) unless the
+    // curated entry itself is the "State" school (like "Ohio State").
+    if(!needle.endsWith("state") && lower.slice(afterIdx).trimStart().startsWith("state ")) continue;
+    if(!best || t.n.length > best.n.length) best = t;
+  }
+  return best;
+}
+function shuffleArr(arr){
+  for(let i=arr.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [arr[i],arr[j]]=[arr[j],arr[i]]; }
+  return arr;
+}
+function seasonYear(){
+  const now = new Date();
+  return now.getMonth()>=6 ? now.getFullYear() : now.getFullYear()-1; // CFB season runs Aug-Jan
+}
+
+// Auto-detects "current week" from ESPN's own season calendar so the commissioner never
+// has to type it in manually. Cached per season; falls back gracefully if unreachable.
+let SEASON_CALENDAR = null, SEASON_CALENDAR_YEAR = null;
+async function ensureSeasonCalendar(year){
+  if(SEASON_CALENDAR && SEASON_CALENDAR_YEAR===year) return SEASON_CALENDAR;
+  try{
+    const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard?groups=80&year=${year}&seasontype=2&week=1&limit=1`);
+    const data = await res.json();
+    const entries = data.leagues && data.leagues[0] && data.leagues[0].calendar && data.leagues[0].calendar[0] && data.leagues[0].calendar[0].entries;
+    if(entries && entries.length){
+      SEASON_CALENDAR = entries.map(e=>({week:parseInt(e.value,10), start:new Date(e.startDate), end:new Date(e.endDate)}));
+      SEASON_CALENDAR_YEAR = year;
+    }
+  }catch(err){ console.error("season calendar fetch failed", err); }
+  return SEASON_CALENDAR;
+}
+function detectCurrentWeekSync(){
+  if(!SEASON_CALENDAR || !SEASON_CALENDAR.length) return null;
+  const now = new Date();
+  for(const w of SEASON_CALENDAR){ if(now>=w.start && now<w.end) return w.week; }
+  if(now < SEASON_CALENDAR[0].start) return 1;
+  return SEASON_CALENDAR[SEASON_CALENDAR.length-1].week;
+}
+async function autoDetectWeek(){
+  await ensureSeasonCalendar(seasonYear());
+  return detectCurrentWeekSync();
+}
+let WEEK_SYNCED_FOR = null;
+async function syncAutoWeek(){
+  const lg = league();
+  if(!lg || lg.settings.weekOverride) return;
+  if(WEEK_SYNCED_FOR===CURRENT_LEAGUE) return;
+  WEEK_SYNCED_FOR = CURRENT_LEAGUE;
+  const wk = await autoDetectWeek();
+  // Never move backward — once a week has advanced (whether by this calendar check earlier, or by
+  // the completed-week auto-advance in maybeShowWeeklyRecap), a stale/preseason calendar read must
+  // not yank everyone's active picking week back down.
+  if(wk && wk!==lg.settings.week && wk>lg.settings.week){
+    await mutate(draft=>{ draft.leagues[CURRENT_LEAGUE].settings.week = wk; });
+  }
+}
+async function enableWeekOverride(){
+  await mutate(draft=>{ draft.leagues[CURRENT_LEAGUE].settings.weekOverride = true; });
+  openSettings();
+}
+async function disableWeekOverride(){
+  await mutate(draft=>{ draft.leagues[CURRENT_LEAGUE].settings.weekOverride = false; });
+  WEEK_SYNCED_FOR = null;
+  await syncAutoWeek();
+  openSettings();
+}
+
+/* =========================================================================
+   UTIL
+   ========================================================================= */
+const $ = id => document.getElementById(id);
+function esc(s){ return (s==null?"":String(s)).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function normPhone(p){
+  let d = (p||"").replace(/\D/g,"");
+  if(d.length===11 && d[0]==="1") d = d.slice(1); // treat +1 country code as equivalent to the bare 10-digit number
+  return d;
+}
+function formatPhoneDisplay(raw){
+  let d = (raw||"").replace(/\D/g,"");
+  let prefix = "";
+  if(d.length>10 && d[0]==="1"){ prefix = "+1 "; d = d.slice(1); }
+  d = d.slice(0,10);
+  if(d.length===0) return "";
+  if(d.length<4) return prefix+`(${d}`;
+  if(d.length<7) return prefix+`(${d.slice(0,3)}) ${d.slice(3)}`;
+  return prefix+`(${d.slice(0,3)}) ${d.slice(3,6)}-${d.slice(6)}`;
+}
+function onPhoneInput(el){
+  const pos = el.selectionStart;
+  const before = el.value.length;
+  el.value = formatPhoneDisplay(el.value);
+  const after = el.value.length;
+  const newPos = Math.max(0, pos + (after-before));
+  el.setSelectionRange(newPos, newPos);
+}
+function initials(name){
+  if(!name) return "?";
+  const parts = name.trim().split(/\s+/);
+  return ((parts[0]?.[0]||"") + (parts[1]?.[0]||"")).toUpperCase() || name[0].toUpperCase();
+}
+function colorFromString(str){
+  let h=0; for(let i=0;i<str.length;i++) h = str.charCodeAt(i) + ((h<<5)-h);
+  const hue = Math.abs(h)%360;
+  return `hsl(${hue} 55% 42%)`;
+}
+async function sha256(text){
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,"0")).join("");
+}
+function genLeagueCode(){
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let out = "";
+  for(let i=0;i<6;i++) out += chars[Math.floor(Math.random()*chars.length)];
+  return out;
+}
+function genGameId(){ return "g" + Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+function showToast(msg, ms=2600){
+  const root = $("toastRoot");
+  root.innerHTML = `<div class="toast">${esc(msg)}</div>`;
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(()=> root.innerHTML="", ms);
+}
+function teamBadgeHtml(team, size, fallbackName, extraClass){
+  const nm = team?.n || fallbackName || "?";
+  const bg = team?.c ? "#"+team.c : colorFromString(nm);
+  const cls = extraClass ? " "+extraClass : "";
+  if(team?.l){
+    return `<img class="badge${cls}" data-name="${esc(nm)}" data-color="${esc(bg)}" data-size="${size}" src="${team.l}" width="${size}" height="${size}" style="width:${size}px;height:${size}px" alt="${esc(nm)}" onerror="handleBadgeError(this)">`;
+  }
+  return `<div class="badge-fallback${cls}" style="width:${size}px;height:${size}px;background:${bg};font-size:${Math.round(size*0.34)}px">${esc(initials(nm))}</div>`;
+}
+function handleBadgeError(img){
+  const name = img.dataset.name || "?";
+  const color = img.dataset.color || colorFromString(name);
+  const size = parseInt(img.dataset.size,10) || 32;
+  const div = document.createElement("div");
+  div.className = img.className.replace("badge","badge-fallback");
+  div.style.cssText = `width:${size}px;height:${size}px;background:${color};font-size:${Math.round(size*0.34)}px`;
+  div.textContent = initials(name);
+  img.replaceWith(div);
+}
+function fmtKickoff(iso){
+  const d = new Date(iso);
+  if(isNaN(d)) return "TBD";
+  const opts = {weekday:"short", month:"short", day:"numeric", hour:"numeric", minute:"2-digit"};
+  return d.toLocaleString(undefined, opts);
+}
+// Testing-only clock override so we can fast-forward "now" without waiting for real time to
+// pass (e.g. to preview Wednesday's spread reveal or a Saturday noon lock). Unused in real
+// production use — nowMs() just falls through to the real clock unless MOCK_NOW is set.
+let MOCK_NOW = null;
+function nowMs(){ return MOCK_NOW!==null ? MOCK_NOW : Date.now(); }
+function hoursUntil(iso){ return (new Date(iso).getTime() - nowMs()) / 36e5; }
+function fmtCountdown(hrs){
+  if(hrs<=0) return "now";
+  if(hrs<1) return Math.round(hrs*60)+"m";
+  if(hrs<48) return Math.round(hrs)+"h";
+  return Math.round(hrs/24)+"d";
+}
+
+/* =========================================================================
+   SESSION / AUTH
+   ========================================================================= */
+// "Remember me" picks which storage backs the session: localStorage survives closing the
+// browser entirely, sessionStorage clears as soon as the tab closes.
+let SESSION_STORE = localStorage.getItem("pickem_session") ? localStorage : sessionStorage;
+let SESSION_PHONE = localStorage.getItem("pickem_session") || sessionStorage.getItem("pickem_session") || null;
+let CURRENT_LEAGUE = localStorage.getItem("pickem_league") || sessionStorage.getItem("pickem_league") || null;
+let CURRENT_TAB = "picks";
+let COMMISH_MODE = false; // commissioner-only edit mode for the Live tab, resets each visit
+
+function toggleCommishMode(){
+  COMMISH_MODE = !COMMISH_MODE;
+  render();
+}
+
+function currentUser(){ return SESSION_PHONE ? DB.users[SESSION_PHONE] : null; }
+
+function setAuthMode(mode){
+  $("tabSignIn").classList.toggle("active", mode==="signin");
+  $("tabSignUp").classList.toggle("active", mode==="signup");
+  $("signInForm").classList.toggle("hidden", mode!=="signin");
+  $("signUpForm").classList.toggle("hidden", mode!=="signup");
+  $("siError").textContent=""; $("suError").textContent="";
+}
+
+function onTeamTyped(){
+  const t = findTeam($("suTeam").value);
+  $("suTeamBadge").innerHTML = t ? teamBadgeHtml(t, 26) : "";
+}
+
+async function doSignUp(){
+  const name = $("suName").value.trim();
+  const phone = normPhone($("suPhone").value);
+  const pass = $("suPassword").value;
+  const teamName = $("suTeam").value.trim();
+  const errEl = $("suError");
+  errEl.textContent = "";
+
+  if(!name || name.length<2) return errEl.textContent = "Enter your name.";
+  if(phone.length<10) return errEl.textContent = "Enter a valid phone number.";
+  if(!pass || pass.length<4) return errEl.textContent = "Password must be at least 4 characters.";
+  if(!teamName) return errEl.textContent = "Pick your favorite team.";
+  if(DB.users[phone]) return errEl.textContent = "That phone number is already registered — try signing in.";
+
+  const team = findTeam(teamName);
+  const passwordHash = await sha256(pass + ":" + phone);
+
+  await mutate(draft=>{
+    draft.users[phone] = {
+      phone, name, passwordHash,
+      favTeam: team ? {n:team.n, l:team.l, c:team.c} : {n:teamName, l:null, c:null},
+      leagues: []
+    };
+  });
+  SESSION_PHONE = phone;
+  SESSION_STORE = $("suRemember") && !$("suRemember").checked ? sessionStorage : localStorage;
+  (SESSION_STORE===localStorage?sessionStorage:localStorage).removeItem("pickem_session");
+  SESSION_STORE.setItem("pickem_session", phone);
+  showToast(`Welcome, ${name.split(" ")[0]}!`);
+  renderRoot();
+}
+
+async function doSignIn(){
+  const phone = normPhone($("siPhone").value);
+  const pass = $("siPassword").value;
+  const errEl = $("siError");
+  errEl.textContent = "";
+  const u = DB.users[phone];
+  if(!u) return errEl.textContent = "No account found with that phone number.";
+  const hash = await sha256(pass + ":" + phone);
+  if(hash !== u.passwordHash) return errEl.textContent = "Incorrect password.";
+  SESSION_PHONE = phone;
+  SESSION_STORE = $("siRemember") && !$("siRemember").checked ? sessionStorage : localStorage;
+  (SESSION_STORE===localStorage?sessionStorage:localStorage).removeItem("pickem_session");
+  SESSION_STORE.setItem("pickem_session", phone);
+  renderRoot();
+}
+
+function signOut(){
+  SESSION_PHONE = null; CURRENT_LEAGUE = null;
+  localStorage.removeItem("pickem_session"); sessionStorage.removeItem("pickem_session");
+  localStorage.removeItem("pickem_league"); sessionStorage.removeItem("pickem_league");
+  renderRoot();
+}
+
+/* =========================================================================
+   LEAGUES
+   ========================================================================= */
+async function createLeague(){
+  const name = $("clName").value.trim();
+  const err = $("clError");
+  err.textContent = "";
+  const gpw = parseInt($("stGamesPerWeek").value,10);
+  const pickMode = $("stPickMode").value;
+  const deadlineMode = $("stDeadlineMode").value;
+  if(!name) return err.textContent = "Give your league a name.";
+  if(isNaN(gpw) || gpw<1) return err.textContent = "Enter how many games per week.";
+  if(!pickMode) return err.textContent = "Choose a weekly game selection mode.";
+  if(!deadlineMode) return err.textContent = "Choose a pick deadline.";
+
+  let selectedConference = null;
+  if(pickMode==="conferences"){
+    selectedConference = $("stConference") ? $("stConference").value : "";
+    if(!selectedConference) return err.textContent = "Choose a conference.";
+  }
+  let pickDeadlineHrs = 1, deadlineDow = 6, deadlineTime = "10:00";
+  if(deadlineMode==="hoursBeforeEach"){
+    pickDeadlineHrs = parseFloat($("stPickDeadline").value);
+    if(isNaN(pickDeadlineHrs)) return err.textContent = "Enter how many hours before kickoff picks should lock.";
+  } else if(deadlineMode==="fixedWeekly"){
+    deadlineDow = parseInt($("stDeadlineDow").value,10);
+    deadlineTime = $("stDeadlineTime").value;
+    if(isNaN(deadlineDow) || !deadlineTime) return err.textContent = "Pick a day and time for the weekly deadline.";
+  }
+
+  const code = genLeagueCode();
+  const phone = SESSION_PHONE;
+  await mutate(draft=>{
+    draft.leagues[code] = {
+      code, name, commish: phone, createdAt: Date.now(),
+      settings: {
+        gamesPerWeek: gpw, week: 1, weekOverride: false,
+        pickMode, selectedConference: selectedConference || undefined,
+        deadlineMode, pickDeadlineHrs, deadlineDow, deadlineTime
+      },
+      members: [phone],
+      pendingMembers: [],
+      games: {}, picks: {}, paused: {}
+    };
+    draft.users[phone].leagues = draft.users[phone].leagues || [];
+    if(!draft.users[phone].leagues.includes(code)) draft.users[phone].leagues.push(code);
+  });
+  closeModal();
+  showToast(`League "${name}" created — code ${code}`);
+  enterLeague(code);
+}
+
+// Joining now requires commissioner approval — nobody slips into a league late or uninvited.
+// A request just adds the phone to pendingMembers; real membership (and the favorite-team
+// auto-add) only happens once the commissioner accepts them in openSettings' Requests section.
+async function joinLeague(){
+  const code = $("jlCode").value.trim().toUpperCase();
+  const err = $("jlError");
+  err.textContent = "";
+  const lg = DB.leagues[code];
+  if(!lg){ err.textContent = "No league found with that code."; return; }
+  const phone = SESSION_PHONE;
+  if(lg.members.includes(phone)){ closeModal(); enterLeague(code); return; }
+  if((lg.pendingMembers||[]).includes(phone)){ err.textContent = "You've already requested to join — waiting on the commissioner."; return; }
+  await mutate(draft=>{
+    const dl = draft.leagues[code];
+    dl.pendingMembers = dl.pendingMembers || [];
+    dl.pendingMembers.push(phone);
+  });
+  closeModal();
+  showToast(`Request sent to join "${lg.name}" — waiting for the commissioner to accept you.`);
+  renderRoot();
+}
+async function acceptJoinRequest(code, phone){
+  await mutate(draft=>{
+    const dl = draft.leagues[code];
+    dl.pendingMembers = (dl.pendingMembers||[]).filter(p=>p!==phone);
+    if(!dl.members.includes(phone)) dl.members.push(phone);
+    draft.users[phone].leagues = draft.users[phone].leagues || [];
+    if(!draft.users[phone].leagues.includes(code)) draft.users[phone].leagues.push(code);
+  });
+  showToast(`${DB.users[phone]?.name||'Member'} accepted.`);
+  await maybeAddNewMemberFavoriteGame(code, phone);
+  openSettings();
+}
+async function declineJoinRequest(code, phone){
+  await mutate(draft=>{
+    const dl = draft.leagues[code];
+    dl.pendingMembers = (dl.pendingMembers||[]).filter(p=>p!==phone);
+  });
+  showToast("Request declined.");
+  openSettings();
+}
+
+function enterLeague(code){
+  CURRENT_LEAGUE = code;
+  SESSION_STORE.setItem("pickem_league", code);
+  CURRENT_TAB = "picks";
+  VIEWING_WEEK = null;
+  LEADERBOARD_VIEWING_WEEK = null;
+  renderRoot();
+  syncLiveScores();
+}
+function goToLeagues(){
+  CURRENT_LEAGUE = null;
+  localStorage.removeItem("pickem_league"); sessionStorage.removeItem("pickem_league");
+  renderRoot();
+}
+
+/* =========================================================================
+   PICKS / GAMES LOGIC
+   ========================================================================= */
+function league(){ return DB.leagues[CURRENT_LEAGUE]; }
+function isCommish(){ const lg=league(); return lg && lg.commish===SESSION_PHONE; }
+function weekGames(){ const lg=league(); if(!lg) return []; return (lg.games[lg.settings.week]||[]).slice().sort((a,b)=> new Date(a.kickoff)-new Date(b.kickoff)); }
+function weekGamesFor(week){ const lg=league(); if(!lg) return []; return (lg.games[week]||[]).slice().sort((a,b)=> new Date(a.kickoff)-new Date(b.kickoff)); }
+// Lets a member browse their picks from earlier weeks on the Picks tab (read-only — those
+// games are already locked by kickoff anyway). Resets to the current week on league entry.
+let VIEWING_WEEK = null;
+function setViewingWeek(w){
+  const lg = league(); if(!lg) return;
+  VIEWING_WEEK = Math.max(1, Math.min(w, lg.settings.week));
+  render();
+}
+// Same idea, independently, for browsing the Leaderboard's week-by-week standings snapshots.
+let LEADERBOARD_VIEWING_WEEK = null;
+function setLeaderboardWeek(w){
+  const lg = league(); if(!lg) return;
+  LEADERBOARD_VIEWING_WEEK = (w==null || isNaN(w)) ? null : Math.max(1, Math.min(w, lg.settings.week));
+  render();
+}
+
+function computeCover(g){
+  if(g.status!=="final" || g.favScore==null || g.dogScore==null || g.spread==null) return null;
+  const diff = g.favScore - g.dogScore;
+  const line = -g.spread; // g.spread is stored negative (e.g. -7); the favorite must win by more than this to cover
+  if(diff > line) return "fav";
+  if(diff < line) return "dog";
+  return "push";
+}
+// A spread is visible once we've both fetched a real line AND passed that game's own
+// Wednesday-before-kickoff reveal time — games with no posted line yet (e.g. buy games
+// against lower-division opponents) simply stay "TBD" until a line exists.
+function spreadVisible(g){
+  if(g.spread==null) return false;
+  if(!g.spreadRevealAt) return true; // manually-added games have no reveal gate
+  return nowMs() >= new Date(g.spreadRevealAt).getTime();
+}
+// Returns ['fav','dog'] or ['dog','fav'] — whichever puts the real away team on the left and
+// the real home team on the right, matching "Away @ Home" convention. Falls back to fav-left
+// when home/away isn't known (manually-added games have no favIsHome data).
+function awayHomeOrder(g){
+  return g.favIsHome===true ? ['dog','fav'] : ['fav','dog'];
+}
+function rankTag(rank){
+  return (rank!=null && rank<=25) ? ` <span class="rank-tag">#${rank}</span>` : '';
+}
+
+async function setPick(gameId, side){
+  const lg = league();
+  const g = (lg.games[lg.settings.week]||[]).find(x=>x.id===gameId);
+  if(!g) return;
+  if(!spreadVisible(g)){
+    const when = g.spreadRevealAt ? new Date(g.spreadRevealAt).toLocaleString(undefined,{weekday:'short',month:'short',day:'numeric'}) : "soon";
+    showToast(`Spread isn't revealed yet — check back ${when} at 12:00 AM to pick this game.`);
+    return;
+  }
+  if(isPickLocked(g, lg)){
+    showToast("Picks are locked for this game.");
+    return;
+  }
+  const phone = SESSION_PHONE;
+  await mutate(draft=>{
+    const dl = draft.leagues[CURRENT_LEAGUE];
+    dl.picks[phone] = dl.picks[phone] || {};
+    dl.picks[phone][gameId] = side;
+  });
+}
+
+async function addGame(){
+  const favName = $("agFav").value.trim();
+  const dogName = $("agDog").value.trim();
+  const spreadRaw = $("agSpread").value.trim();
+  const kickoff = $("agKickoff").value;
+  const err = $("agError");
+  err.textContent = "";
+  if(!favName || !dogName) return err.textContent = "Enter both teams.";
+  if(!kickoff) return err.textContent = "Set a kickoff time.";
+  const spread = spreadRaw==="" ? null : parseFloat(spreadRaw);
+  if(spreadRaw!=="" && isNaN(spread)) return err.textContent = "Spread must be a number, or leave it blank for TBD.";
+  const lg = league();
+  const existingCount = (lg.games[lg.settings.week]||[]).length;
+  if(existingCount >= lg.settings.gamesPerWeek){
+    return err.textContent = `You're already at your ${lg.settings.gamesPerWeek}-game target for this week — raise it in Settings or delete a game first.`;
+  }
+  const fav = findTeam(favName), dog = findTeam(dogName);
+  await mutate(draft=>{
+    const dl = draft.leagues[CURRENT_LEAGUE];
+    const wk = dl.settings.week;
+    dl.games[wk] = dl.games[wk] || [];
+    dl.games[wk].push({
+      id: genGameId(),
+      fav: fav ? {n:fav.n,l:fav.l,c:fav.c} : {n:favName,l:null,c:null},
+      dog: dog ? {n:dog.n,l:dog.l,c:dog.c} : {n:dogName,l:null,c:null},
+      spread, spreadRevealAt: null, kickoff: new Date(kickoff).toISOString(),
+      status: "scheduled", favScore: null, dogScore: null
+    });
+  });
+  $("agFav").value=""; $("agDog").value=""; $("agSpread").value=""; $("agKickoff").value="";
+  showToast("Game added.");
+  render();
+}
+
+// Finds the "primary" game day for a week's slate (almost always Saturday) using the actual
+// fetched events, then walks back to that same week's Wednesday at local midnight.
+// Per-game reveal gate: the Wednesday at local midnight preceding THAT game's own kickoff.
+function computeSpreadRevealTime(kickoffISO){
+  const k = new Date(kickoffISO);
+  const lock = new Date(k);
+  const diffToWed = (lock.getDay() - 3 + 7) % 7; // days since the preceding Wednesday
+  lock.setDate(lock.getDate() - diffToWed);
+  lock.setHours(0,0,0,0);
+  return lock.toISOString();
+}
+
+// Buckets a kickoff into the major CFB broadcast windows (Eastern time), so fill logic can
+// spread picks across them instead of clumping into one slot (e.g. five 3:30pm games). This
+// balancing is always-on and isn't something the commissioner configures.
+function timeSlotOf(kickoffISO){
+  const d = new Date(kickoffISO);
+  const parts = new Intl.DateTimeFormat("en-US", {timeZone:"America/New_York", hour:"numeric", hour12:false, weekday:"short"}).formatToParts(d);
+  let hour = parseInt(parts.find(p=>p.type==="hour").value, 10);
+  if(hour===24) hour = 0;
+  const weekday = parts.find(p=>p.type==="weekday").value;
+  if(weekday!=="Sat"){
+    if(weekday==="Thu" || weekday==="Fri") return "Friday Night";
+    return "Other";
+  }
+  if(hour>=11 && hour<14) return "Saturday Noon";
+  if(hour>=14 && hour<18) return "Saturday Afternoon";
+  if(hour>=18) return "Saturday Primetime";
+  return "Other";
+}
+
+// True weighted-random draw without replacement — a higher weight makes a candidate MUCH more
+// likely to come out early, but never guarantees it. weightFn null means every candidate is
+// equally likely (pure random).
+function weightedShuffle(arr, weightFn){
+  const pool = arr.map(item=>({item, weight: weightFn ? Math.max(0.0001, weightFn(item)) : 1}));
+  const out = [];
+  while(pool.length){
+    const total = pool.reduce((s,p)=>s+p.weight, 0);
+    let r = Math.random()*total, idx = 0;
+    for(; idx<pool.length; idx++){ r -= pool[idx].weight; if(r<=0) break; }
+    if(idx>=pool.length) idx = pool.length-1;
+    out.push(pool[idx].item);
+    pool.splice(idx,1);
+  }
+  return out;
+}
+
+// Buckets candidates by time slot, weighted-shuffles each bucket (a preference skews the odds,
+// it doesn't force an order), then round-robins across buckets so slots stay balanced overall.
+function diversifyByTimeSlot(list, weightFn){
+  const bySlot = {};
+  list.forEach(c=>{ const slot = timeSlotOf(c.kickoff); (bySlot[slot]=bySlot[slot]||[]).push(c); });
+  Object.keys(bySlot).forEach(k=>{ bySlot[k] = weightedShuffle(bySlot[k], weightFn); });
+  const slotKeys = shuffleArr(Object.keys(bySlot));
+  const out = [];
+  let round = 0, guard = 0;
+  while(out.length < list.length && guard < 1000){
+    let added = false;
+    for(const slot of slotKeys){
+      const arr = bySlot[slot];
+      if(arr[round]){ out.push(arr[round]); added = true; }
+    }
+    round++; guard++;
+    if(!added) break;
+  }
+  return out;
+}
+
+// Weight functions for the commissioner's optional "Ranked Game Preference" — a match gets a
+// much higher chance of being picked, but a non-match is still possible, just far less likely.
+const RANK_PREF_BOOST = 6;
+function rankPrefWeightFn(pref){
+  if(pref==="top25Both") return c => (c.favRank<=25 && c.dogRank<=25) ? RANK_PREF_BOOST : 1;
+  if(pref==="top25Either") return c => (c.favRank<=25 || c.dogRank<=25) ? RANK_PREF_BOOST : 1;
+  if(pref==="top10Single") return c => (c.favRank<=10 || c.dogRank<=10) ? RANK_PREF_BOOST : 1;
+  return null;
+}
+
+// The "Regenerate / Top Up" button: clears out any game that's still just "scheduled" AND has
+// no picks from anyone yet, then lets generateWeekGames() fill back up to target with a fresh
+// random draw (still respecting favorites, ranked preference, and time-slot balance). Anything
+// live, final, or already picked is left alone — re-rolling never invalidates a real pick.
+// Builds a normalized game candidate from one ESPN event, or null if the event is unusable.
+// Shared by the full-week generator and the single-team lookup used when a new member joins.
+function buildCandidateFromEvent(ev){
+  const comp = ev.competitions && ev.competitions[0];
+  const home = comp && comp.competitors.find(c=>c.homeAway==="home");
+  const away = comp && comp.competitors.find(c=>c.homeAway==="away");
+  if(!comp || !home || !away) return null;
+  const odds = comp.odds && comp.odds[0];
+  const hasOdds = !!(odds && typeof odds.spread === "number");
+  const homeIsFav = hasOdds ? !!(odds.homeTeamOdds && odds.homeTeamOdds.favorite) : true; // no line yet: home shown as placeholder favorite
+  const favC = homeIsFav ? home : away;
+  const dogC = homeIsFav ? away : home;
+  const favTeam = matchLiveTeam(favC.team.displayName);
+  const dogTeam = matchLiveTeam(dogC.team.displayName);
+  const favEntry = favTeam ? {n:favTeam.n,l:favTeam.l,c:favTeam.c} : {n:favC.team.displayName,l:(favC.team.logo||null),c:null};
+  const dogEntry = dogTeam ? {n:dogTeam.n,l:dogTeam.l,c:dogTeam.c} : {n:dogC.team.displayName,l:(dogC.team.logo||null),c:null};
+  const kickoff = new Date(comp.date).toISOString();
+  const homeRank = (home.curatedRank && home.curatedRank.current) || 99;
+  const awayRank = (away.curatedRank && away.curatedRank.current) || 99;
+  const favRank = homeIsFav ? homeRank : awayRank;
+  const dogRank = homeIsFav ? awayRank : homeRank;
+  // No real line posted yet (common for games more than a week or two out) — make one up rather
+  // than leaving picks stuck on "TBD". Skews toward small-to-medium spreads, since blowout lines
+  // are rarer than close ones; a real line just overwrites this the next time games are topped up.
+  const fakeSpread = -(3 + Math.round(Math.pow(Math.random(),1.6)*32*2)/2);
+  return {
+    key: favEntry.n+"@"+dogEntry.n, fav:favEntry, dog:dogEntry,
+    spread: hasOdds ? -Math.abs(odds.spread) : fakeSpread,
+    kickoff, spreadRevealAt: computeSpreadRevealTime(kickoff),
+    espnId: ev.id, favIsHome: homeIsFav,
+    rankHit: favRank<=25 || dogRank<=25, favRank, dogRank,
+    conf: CONFERENCE_OF[favEntry.n] || CONFERENCE_OF[dogEntry.n] || "Other"
+  };
+}
+
+// When a new member joins a league running Favorite Teams mode, quietly check whether their
+// team is already playing this week and, if there's room, add just that one game — no full
+// regenerate, no reshuffling anything else. If their team isn't found playing, games are left
+// exactly as they were.
+async function maybeAddNewMemberFavoriteGame(code, phone){
+  const lg = DB.leagues[code];
+  if(!lg || (lg.settings.pickMode||"manual")!=="favorites") return;
+  const wk = lg.settings.week;
+  const existing = lg.games[wk] || [];
+  const teamName = DB.users[phone] && DB.users[phone].favTeam && DB.users[phone].favTeam.n;
+  if(!teamName) return;
+  if(existing.some(g=> g.fav.n===teamName || g.dog.n===teamName)) return; // already in the slate
+  if(existing.length >= lg.settings.gamesPerWeek) return; // no room — keep games the same
+
+  try{
+    const year = seasonYear();
+    const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard?groups=80&year=${year}&seasontype=2&week=${wk}&limit=200`);
+    if(!res.ok) return;
+    const data = await res.json();
+    for(const ev of (data.events||[])){
+      const c = buildCandidateFromEvent(ev);
+      if(!c || (c.fav.n!==teamName && c.dog.n!==teamName)) continue;
+      await mutate(draft=>{
+        const dl = draft.leagues[code];
+        dl.games[wk] = dl.games[wk] || [];
+        if(dl.games[wk].length >= dl.settings.gamesPerWeek) return;
+        if(dl.games[wk].some(g=> g.fav.n+"@"+g.dog.n===c.key)) return;
+        dl.games[wk].push({ id: genGameId(), fav:c.fav, dog:c.dog, spread:c.spread, spreadRevealAt:c.spreadRevealAt, kickoff:c.kickoff, status:"scheduled", favScore:null, dogScore:null, espnId:c.espnId, favIsHome:c.favIsHome, favRank:c.favRank, dogRank:c.dogRank });
+      });
+      render();
+      showToast(`${teamName} is playing this week — added their game.`);
+      return;
+    }
+    // their team isn't playing this week (or couldn't be matched) — games are left unchanged
+  }catch(err){
+    console.error("auto-add on join failed", err);
+  }
+}
+
+async function regenerateWeekGames(){
+  const lg = league();
+  const wk = lg.settings.week;
+  const isLocked = g => g.status!=="scheduled" || Object.values(lg.picks||{}).some(p=>p && p[g.id]);
+  const all = lg.games[wk] || [];
+  const removable = all.filter(g=>!isLocked(g));
+  if(all.length>0 && removable.length===0){
+    showToast("Nothing to re-roll — every game is live/final or already has a pick on it.");
+    return;
+  }
+  await mutate(draft=>{
+    const dl = draft.leagues[CURRENT_LEAGUE];
+    dl.games[wk] = (dl.games[wk]||[]).filter(isLocked);
+  });
+  render();
+  await generateWeekGames();
+}
+
+let GENERATE_IN_FLIGHT = false;
+async function generateWeekGames(){
+  const lg = league();
+  const wk = lg.settings.week;
+  const mode = lg.settings.pickMode || "manual";
+  if(mode==="manual") return;
+  if(GENERATE_IN_FLIGHT) return; // guards against overlapping triggers (auto-generate, delete-refill, a fast double-click) racing each other
+  GENERATE_IN_FLIGHT = true;
+  const target = lg.settings.gamesPerWeek;
+  const existing = (lg.games[wk] || []);
+  const btn = $("genGamesBtn");
+  if(btn){ btn.disabled = true; btn.textContent = "Fetching live matchups…"; }
+  try{
+    const year = seasonYear();
+    const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard?groups=80&year=${year}&seasontype=2&week=${wk}&limit=200`);
+    if(!res.ok) throw new Error("bad response");
+    const data = await res.json();
+    const events = data.events || [];
+
+    const seenKeys = new Set(existing.map(g=> g.fav.n+"@"+g.dog.n));
+    const candidates = [];
+    events.forEach(ev=>{
+      const c = buildCandidateFromEvent(ev);
+      if(!c || seenKeys.has(c.key)) return;
+      seenKeys.add(c.key);
+      candidates.push(c);
+    });
+    // Games with no posted line yet are never excluded — they're still added, just shown as
+    // "TBD" until a real spread appears (and stay hidden behind the Wednesday reveal either way).
+
+    let slots = Math.max(0, target - existing.length);
+    const slotsNeeded = slots;
+    let chosen = [];
+    let favCount = 0;
+
+    if(mode==="favorites"){
+      const favTeamNames = new Set(lg.members.map(p=> DB.users[p] && DB.users[p].favTeam && DB.users[p].favTeam.n).filter(Boolean));
+      const isFavHit = c => favTeamNames.has(c.fav.n) || favTeamNames.has(c.dog.n);
+      const favPicks = candidates.filter(isFavHit);
+      const restPool = candidates.filter(c=> !isFavHit(c));
+      shuffleArr(favPicks);
+      chosen = favPicks.slice(0, slots);
+      slots -= chosen.length;
+      // Fill is always random and innately balances across Friday Night / Saturday Noon /
+      // Afternoon / Primetime slots. An optional ranked-game preference skews the odds toward
+      // matches — it never guarantees them, just makes them much more likely.
+      if(slots>0){
+        const weightFn = rankPrefWeightFn(lg.settings.favoritesRankPref);
+        chosen = chosen.concat(diversifyByTimeSlot(restPool, weightFn).slice(0, slots));
+      }
+      favCount = chosen.filter(isFavHit).length;
+    } else if(mode==="top25"){
+      const ranked = candidates.filter(c=>c.rankHit);
+      const other = candidates.filter(c=>!c.rankHit);
+      shuffleArr(ranked);
+      chosen = ranked.slice(0, slots);
+      slots -= chosen.length;
+      if(slots>0){ shuffleArr(other); chosen = chosen.concat(other.slice(0, slots)); }
+    } else if(mode==="conferences"){
+      const targetConf = lg.settings.selectedConference || Object.keys(CONFERENCE_GROUPS)[0];
+      const favTeamNames = new Set(lg.members.map(p=> DB.users[p] && DB.users[p].favTeam && DB.users[p].favTeam.n).filter(Boolean));
+      const isFavHit = c => favTeamNames.has(c.fav.n) || favTeamNames.has(c.dog.n);
+      const inConf = candidates.filter(c=> c.conf===targetConf);
+      // A member's favorite team playing in the chosen conference is always guaranteed a spot.
+      const favInConf = inConf.filter(isFavHit);
+      const restInConf = inConf.filter(c=> !isFavHit(c));
+      shuffleArr(favInConf);
+      chosen = favInConf.slice(0, slots);
+      slots -= chosen.length;
+      if(slots>0){ chosen = chosen.concat(diversifyByTimeSlot(restInConf, null).slice(0, slots)); } // conference-only: no fallback to other conferences, even if under target
+      favCount = chosen.filter(isFavHit).length;
+    }
+
+    if(chosen.length===0){
+      showToast(mode==="top25" ? "No ranked matchups found for this week yet."
+        : mode==="conferences" ? `No live ${lg.settings.selectedConference||'conference'} games found for this week yet.`
+        : "No new live matchups found to add — try adding manually.");
+      return;
+    }
+
+    await mutate(draft=>{
+      const dl = draft.leagues[CURRENT_LEAGUE];
+      dl.games[wk] = dl.games[wk] || [];
+      chosen.forEach(c=>{
+        dl.games[wk].push({ id: genGameId(), fav:c.fav, dog:c.dog, spread:c.spread, spreadRevealAt:c.spreadRevealAt, kickoff:c.kickoff, status:"scheduled", favScore:null, dogScore:null, espnId:c.espnId, favIsHome:c.favIsHome, favRank:c.favRank, dogRank:c.dogRank });
+      });
+    });
+    const modeNote = mode==="top25" ? " (ranked matchups)"
+      : mode==="conferences" ? ` — all ${lg.settings.selectedConference||'conference'}${favCount?` (${favCount} from favorite teams)`:''}${chosen.length<slotsNeeded?` (only ${chosen.length} available, short of your ${target} target)`:''}`
+      : ` (${favCount} from favorite teams)`;
+    showToast(`Added ${chosen.length} game${chosen.length===1?"":"s"}${modeNote}.`);
+    render();
+  }catch(err){
+    console.error(err);
+    showToast("Couldn't reach ESPN for live matchups — check your connection or add games manually.");
+  }finally{
+    GENERATE_IN_FLIGHT = false;
+    if(btn){ btn.disabled=false; btn.textContent = "⚡ Regenerate / Top Up Week "+wk; }
+  }
+}
+
+async function updateGameField(gameId, field, value){
+  await mutate(draft=>{
+    const dl = draft.leagues[CURRENT_LEAGUE];
+    const wk = dl.settings.week;
+    const g = (dl.games[wk]||[]).find(x=>x.id===gameId);
+    if(!g) return;
+    if(field==="favScore" || field==="dogScore"){
+      g[field] = value==="" ? null : parseInt(value,10);
+    } else if(field==="status"){
+      g.status = value;
+    } else if(field==="spread"){
+      g.spread = value==="" ? null : parseFloat(value);
+      g.spreadRevealAt = null; // a commissioner-set spread is visible immediately
+    }
+  });
+}
+
+// Auto-updates scores/status for games that were pulled in via Auto-Fill (they carry a
+// stored ESPN event id). Manually-added games have no espnId and are left for the
+// commissioner to update by hand, since there's no reliable way to match them live.
+let SYNC_IN_FLIGHT = false;
+function notifyFinalizedPicks(week, gameIds){
+  if(!gameIds.length) return;
+  const u = currentUser();
+  if(!u || !u.notifPrefs || !u.notifPrefs.push) return;
+  if(!("Notification" in window) || Notification.permission!=="granted") return;
+  const lg = league();
+  if(!lg) return;
+  const myPicks = lg.picks[SESSION_PHONE] || {};
+  gameIds.forEach(gid=>{
+    const pick = myPicks[gid];
+    if(!pick) return; // only notify for games this user actually picked
+    const g = (lg.games[week]||[]).find(x=>x.id===gid);
+    if(!g) return;
+    const cover = computeCover(g);
+    if(!cover) return;
+    const result = cover==="push" ? "Push — no cover" : (pick===cover ? "You covered ✓" : "No cover");
+    new Notification("Game final", {body:`${g.fav.n} ${g.favScore}-${g.dogScore} ${g.dog.n} — ${result}`});
+  });
+}
+// No background polling of the server — a fresh docRef.get() only happens on app open, a
+// manual pull-to-refresh, or when a game in the current week crosses one of two moments that
+// actually change what's on screen for everyone: its Wednesday spread reveal, or its kickoff
+// (which locks picks and starts live scoring). This timer just watches for those two crossings.
+const REFRESH_FIRED = new Set();
+function checkScheduledRefresh(){
+  if(!DB_READY || !CURRENT_LEAGUE) return;
+  const lg = league();
+  if(!lg) return;
+  const games = lg.games[lg.settings.week] || [];
+  games.forEach(g=>{
+    if(g.spreadRevealAt && nowMs() >= new Date(g.spreadRevealAt).getTime()){
+      const key = g.id+":reveal";
+      if(!REFRESH_FIRED.has(key)){ REFRESH_FIRED.add(key); refreshFromServer(); }
+    }
+    if(nowMs() >= new Date(g.kickoff).getTime()){
+      const key = g.id+":kickoff";
+      if(!REFRESH_FIRED.has(key)){ REFRESH_FIRED.add(key); refreshFromServer(); }
+    }
+  });
+}
+// Two reminder types, both foreground-only (see notification settings copy):
+//  - Once per league+week, at Wednesday noon (spreads reveal at Wednesday midnight, so
+//    picks are open by then) — "spreads are live, go make your picks."
+//  - Once per game, an hour before kickoff, but ONLY if this user still hasn't picked it.
+// NOTIFIED_REMINDERS is in-memory only (like the rest of this test DB) so it resets on reload.
+const NOTIFIED_REMINDERS = new Set();
+function checkPickReminders(){
+  if(!DB_READY || !CURRENT_LEAGUE) return;
+  const u = currentUser();
+  if(!u || !u.notifPrefs || !u.notifPrefs.push) return;
+  if(!("Notification" in window) || Notification.permission!=="granted") return;
+  const lg = league();
+  if(!lg) return;
+  const wk = lg.settings.week;
+  const games = (lg.games[wk]||[]).filter(g=>g.status==="scheduled");
+  if(!games.length) return;
+  const myPicks = lg.picks[SESSION_PHONE] || {};
+
+  const noonKey = `${lg.code}:${wk}:wedNoon`;
+  if(!NOTIFIED_REMINDERS.has(noonKey)){
+    const wedMidnight = new Date(computeSpreadRevealTime(games[0].kickoff)).getTime();
+    const wedNoon = wedMidnight + 12*3600*1000;
+    if(nowMs() >= wedNoon){
+      NOTIFIED_REMINDERS.add(noonKey);
+      const unpicked = games.filter(g=> !myPicks[g.id]).length;
+      if(unpicked>0) new Notification("Spreads are live", {body:`Week ${wk} picks are open — ${unpicked} game${unpicked===1?"":"s"} still need${unpicked===1?"s":""} your pick.`});
+    }
+  }
+
+  games.forEach(g=>{
+    if(myPicks[g.id]) return; // already picked, no reminder needed
+    const key = `${g.id}:kickoffReminder`;
+    if(NOTIFIED_REMINDERS.has(key)) return;
+    const hrs = hoursUntil(g.kickoff);
+    if(hrs<=1 && hrs>-0.5){
+      NOTIFIED_REMINDERS.add(key);
+      new Notification("1 hour to kickoff", {body:`You haven't picked ${g.fav.n} vs ${g.dog.n} yet.`});
+    }
+  });
+}
+async function syncLiveScores(){
+  if(MOCK_NOW!==null) return; // real-time ESPN polling would fight simulated/mock-clock testing data
+  if(SYNC_IN_FLIGHT || !CURRENT_LEAGUE || !DB_READY) return;
+  const lg = league();
+  if(!lg) return;
+  const wk = lg.settings.week;
+  const games = lg.games[wk] || [];
+  const trackable = games.filter(g=> g.espnId && g.status!=="final");
+  if(trackable.length===0) return;
+  SYNC_IN_FLIGHT = true;
+  try{
+    const year = seasonYear();
+    const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard?groups=80&year=${year}&seasontype=2&week=${wk}&limit=200`);
+    if(!res.ok) return;
+    const data = await res.json();
+    const byId = {};
+    (data.events||[]).forEach(ev=>{ byId[ev.id] = ev; });
+
+    let changed = false;
+    const justFinalizedIds = [];
+    await mutate(draft=>{
+      const dl = draft.leagues[CURRENT_LEAGUE];
+      const list = dl.games[wk] || [];
+      list.forEach(g=>{
+        if(!g.espnId || g.status==="final") return;
+        const ev = byId[g.espnId];
+        const comp = ev && ev.competitions && ev.competitions[0];
+        if(!comp) return;
+        const home = comp.competitors.find(c=>c.homeAway==="home");
+        const away = comp.competitors.find(c=>c.homeAway==="away");
+        if(!home || !away) return;
+        const favC = g.favIsHome ? home : away;
+        const dogC = g.favIsHome ? away : home;
+        const favScore = parseInt(favC.score,10);
+        const dogScore = parseInt(dogC.score,10);
+        const state = comp.status && comp.status.type && comp.status.type.state;
+        const newStatus = state==="in" ? "live" : (state==="post" ? "final" : "scheduled");
+        const periodLabel = (comp.status && comp.status.type && comp.status.type.shortDetail) || null;
+        if(g.favScore!==favScore || g.dogScore!==dogScore || g.status!==newStatus || g.periodLabel!==periodLabel){
+          g.favScore = isNaN(favScore) ? g.favScore : favScore;
+          g.dogScore = isNaN(dogScore) ? g.dogScore : dogScore;
+          g.status = newStatus;
+          g.periodLabel = periodLabel;
+          changed = true;
+          if(newStatus==="final") justFinalizedIds.push(g.id);
+        }
+      });
+    });
+    if(changed) render();
+    notifyFinalizedPicks(wk, justFinalizedIds);
+  }catch(err){
+    console.error("live sync failed", err);
+  }finally{
+    SYNC_IN_FLIGHT = false;
+  }
+}
+
+function confirmClearPause(phone, name){
+  const root = $("modalRoot");
+  root.innerHTML = `<div class="modal-backdrop center" onclick="if(event.target===this)closeModal()">
+    <div class="modal-sheet">
+      <div class="modal-title">Clear pause history?</div>
+      <div class="muted" style="margin-bottom:18px">Every week ${esc(name)} was paused for will be restored to normal scoring. This can't be undone.</div>
+      <div style="display:flex;gap:10px">
+        <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+        <button class="btn" style="background:var(--loss);color:#fff;border:none" onclick="closeModal();clearPauseHistory('${phone}')">Clear</button>
+      </div>
+    </div>
+  </div>`;
+}
+function confirmDeleteGame(gameId, matchupLabel){
+  const root = $("modalRoot");
+  root.innerHTML = `<div class="modal-backdrop center" onclick="if(event.target===this)closeModal()">
+    <div class="modal-sheet">
+      <div class="modal-title">Delete this game?</div>
+      <div class="muted" style="margin-bottom:18px">${esc(matchupLabel)} will be removed for everyone in the league. This can't be undone.</div>
+      <div style="display:flex;gap:10px">
+        <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+        <button class="btn" style="background:var(--loss);color:#fff;border:none" onclick="closeModal();deleteGame('${gameId}')">Delete</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+async function deleteGame(gameId){
+  const lg = league();
+  const wk = lg.settings.week;
+  const autoMode = (lg.settings.pickMode||"manual") !== "manual";
+  await mutate(draft=>{
+    const dl = draft.leagues[CURRENT_LEAGUE];
+    dl.games[wk] = (dl.games[wk]||[]).filter(x=>x.id!==gameId);
+  });
+  render();
+  const remaining = (league().games[wk]||[]).length;
+  if(autoMode && remaining < lg.settings.gamesPerWeek){
+    showToast("Topping back up to your games/week target…");
+    await generateWeekGames();
+  } else {
+    showToast("Game deleted.");
+  }
+}
+
+async function saveSettings(){
+  const gpw = parseInt($("stGamesPerWeek").value,10);
+  const deadlineMode = $("stDeadlineMode").value;
+  const pdh = $("stPickDeadline") ? parseFloat($("stPickDeadline").value) : null;
+  const dow = $("stDeadlineDow") ? parseInt($("stDeadlineDow").value,10) : null;
+  const dtime = $("stDeadlineTime") ? $("stDeadlineTime").value : null;
+  const wk = $("stWeek") ? parseInt($("stWeek").value,10) : null;
+  const pickMode = $("stPickMode").value;
+  const selectedConference = $("stConference") ? $("stConference").value : null;
+  const favoritesRankPref = $("stRankPref") ? $("stRankPref").value : null;
+  await mutate(draft=>{
+    const dl = draft.leagues[CURRENT_LEAGUE];
+    dl.settings.gamesPerWeek = isNaN(gpw)?dl.settings.gamesPerWeek:gpw;
+    dl.settings.deadlineMode = deadlineMode;
+    if(pdh!=null && !isNaN(pdh)) dl.settings.pickDeadlineHrs = pdh;
+    if(dow!=null && !isNaN(dow)) dl.settings.deadlineDow = dow;
+    if(dtime) dl.settings.deadlineTime = dtime;
+    if(wk!=null && !isNaN(wk) && dl.settings.weekOverride) dl.settings.week = wk;
+    dl.settings.pickMode = pickMode;
+    if(selectedConference) dl.settings.selectedConference = selectedConference;
+    if($("stRankPref")) dl.settings.favoritesRankPref = favoritesRankPref;
+  });
+  showToast("League rules updated.");
+  closeModal();
+}
+
+/* =========================================================================
+   STANDINGS
+   ========================================================================= */
+// Pause is stored as a list of week-ranges per member so it's fully reversible: unpausing
+// stops the penalty going forward, and "Reset" wipes the history entirely (undoes a mistake).
+// Pause is timestamp-based, not week-based: a game only counts as an auto-loss if its kickoff
+// happens at-or-after the moment someone was paused (i.e. it hadn't locked in yet) and before
+// any unpause. A game that had already kicked off — win, loss, or push — keeps its real grade;
+// pausing someone mid-week doesn't retroactively touch what they'd already locked in.
+function isPausedForGame(lg, phone, game){
+  const ranges = (lg.paused && lg.paused[phone]) || [];
+  const kickoffMs = new Date(game.kickoff).getTime();
+  return ranges.some(r=> kickoffMs >= r.pausedAt && (r.unpausedAt==null || kickoffMs < r.unpausedAt));
+}
+function isPausedNow(lg, phone){
+  const ranges = (lg.paused && lg.paused[phone]) || [];
+  return ranges.some(r=> r.unpausedAt==null);
+}
+
+// A "week complete" gate is more reliable than a hard "Monday" check since real slates can run
+// into Sunday/Monday night — the recap becomes available the moment every game has a final score.
+function weekIsComplete(lg, week){
+  const games = lg.games[week] || [];
+  return games.length>0 && games.every(g=> g.status==="final");
+}
+function maybeShowWeeklyRecap(){
+  const lg = league(), u = currentUser();
+  if(!lg || !u) return;
+  const week = lg.settings.week;
+  if((u.recapSeen && u.recapSeen[CURRENT_LEAGUE])===week) return; // already seen this week's recap
+  if(!weekIsComplete(lg, week)) return;
+  openWeeklyRecap(week);
+  mutate(draft=>{
+    const du = draft.users[SESSION_PHONE];
+    du.recapSeen = du.recapSeen || {};
+    du.recapSeen[CURRENT_LEAGUE] = week;
+    // Move everyone's active picking week forward once the completed week's recap has been
+    // shown — last week's final scores stay reachable via the Leaderboard's week dropdown,
+    // and the new week just sits there (no picks open) until its spreads reveal Wednesday.
+    const dl = draft.leagues[CURRENT_LEAGUE];
+    if(!dl.settings.weekOverride && dl.settings.week===week) dl.settings.week = week+1;
+  });
+}
+// Shared by the recap and the per-game "who picked" reveal — nobody's pick is visible to
+// anyone else until the game itself locks (kickoff/deadline passes), at which point it can't
+// change anyone's strategy anymore, so revealing it is just fun rather than a leak.
+function pickersFor(lg, g, side){
+  return lg.members
+    .filter(p=> (lg.picks[p]||{})[g.id]===side)
+    .map(p=>DB.users[p]).filter(Boolean);
+}
+function avatarsHtml(list){
+  return list.length
+    ? list.map(u=>`<div class="mini-avatar" title="${esc(u.name)}">${esc(initials(u.name))}</div>`).join('')
+    : `<span class="recap-none">nobody picked this</span>`;
+}
+function recapGameHtml(lg, g){
+  const cover = computeCover(g);
+  const isPush = cover==="push";
+  const sideCls = side => isPush ? "recap-push" : (cover===side ? "recap-cover" : "recap-nocover");
+  const teamBlock = (team, side, score) => `<div class="recap-team ${sideCls(side)}">
+      ${teamBadgeHtml(team,40)}
+      <div class="recap-team-name">${esc(team.n)}</div>
+      <div class="recap-score">${score}</div>
+      <div class="mini-avatar-row">${avatarsHtml(pickersFor(lg, g, side))}</div>
+    </div>`;
+  return `<div class="recap-game">
+    <div class="recap-kickoff">${esc(fmtKickoff(g.kickoff))}</div>
+    <div class="recap-matchup">
+      ${teamBlock(g.fav, "fav", g.favScore)}
+      ${teamBlock(g.dog, "dog", g.dogScore)}
+    </div>
+    ${isPush ? `<div class="recap-push-tag">PUSHED — nobody covered</div>` : ''}
+  </div>`;
+}
+function completedWeeks(lg){
+  return Object.keys(lg.games).map(w=>parseInt(w,10)).filter(w=>weekIsComplete(lg,w)).sort((a,b)=>a-b);
+}
+function latestCompletedWeek(lg){
+  const weeks = completedWeeks(lg);
+  return weeks.length ? weeks[weeks.length-1] : null;
+}
+function openWeeklyRecap(week){
+  const lg = league();
+  if(!lg) return;
+  const weeks = completedWeeks(lg);
+  if(week==null) week = latestCompletedWeek(lg);
+  if(week==null){ showToast("No completed weeks yet — recaps show up once a week's games are all final."); return; }
+  const idx = weeks.indexOf(week);
+  const prevWeek = idx>0 ? weeks[idx-1] : null;
+  const nextWeek = idx>=0 && idx<weeks.length-1 ? weeks[idx+1] : null;
+  const games = (lg.games[week]||[]).slice().sort((a,b)=> new Date(a.kickoff)-new Date(b.kickoff));
+  const root = $("modalRoot");
+  root.innerHTML = `<div class="modal-backdrop" onclick="if(event.target===this)closeModal()">
+    <div class="modal-sheet"><div class="modal-handle"></div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+        <button class="icon-btn" style="width:30px;height:30px" onclick="openWeeklyRecap(${prevWeek})" ${prevWeek==null?'disabled':''}>‹</button>
+        <div class="modal-title" style="margin-bottom:0;flex:1">Week ${week} Recap</div>
+        <button class="icon-btn" style="width:30px;height:30px" onclick="openWeeklyRecap(${nextWeek})" ${nextWeek==null?'disabled':''}>›</button>
+      </div>
+      <div class="muted" style="margin-bottom:16px">Every game, chronologically, and who covered.</div>
+      ${games.map(g=>recapGameHtml(lg,g)).join('') || `<div class="empty-hint">No games this week.</div>`}
+      <button class="btn btn-primary" style="margin-top:4px" onclick="closeModal()">Done</button>
+    </div></div>`;
+}
+async function pauseMember(phone){
+  await mutate(draft=>{
+    const dl = draft.leagues[CURRENT_LEAGUE];
+    dl.paused = dl.paused || {};
+    dl.paused[phone] = dl.paused[phone] || [];
+    if(!dl.paused[phone].some(r=>r.unpausedAt==null)) dl.paused[phone].push({pausedAt: nowMs(), unpausedAt: null});
+  });
+  showToast("Member paused — games that haven't kicked off yet will auto-lose until unpaused.");
+  openSettings();
+}
+async function unpauseMember(phone){
+  await mutate(draft=>{
+    const dl = draft.leagues[CURRENT_LEAGUE];
+    const ranges = (dl.paused && dl.paused[phone]) || [];
+    const open = ranges.find(r=>r.unpausedAt==null);
+    if(open) open.unpausedAt = nowMs();
+  });
+  showToast("Member unpaused.");
+  openSettings();
+}
+async function clearPauseHistory(phone){
+  await mutate(draft=>{
+    const dl = draft.leagues[CURRENT_LEAGUE];
+    if(dl.paused) dl.paused[phone] = [];
+  });
+  showToast("Pause history cleared — every game restored to normal scoring.");
+  openSettings();
+}
+
+function computeStandings(lg, uptoWeek){
+  const rows = lg.members.map(phone=>{
+    const u = DB.users[phone];
+    let wins=0, losses=0, pushes=0;
+    Object.keys(lg.games).forEach(wk=>{
+      if(uptoWeek!=null && parseInt(wk,10)>uptoWeek) return;
+      (lg.games[wk]||[]).forEach(g=>{
+        if(g.status!=="final") return;
+        if(isPausedForGame(lg, phone, g)){ losses++; return; }
+        const cover = computeCover(g);
+        if(!cover) return;
+        const pick = (lg.picks[phone]||{})[g.id];
+        if(!pick) return;
+        if(cover==="push") pushes++;
+        else if(pick===cover) wins++;
+        else losses++;
+      });
+    });
+    const total = wins+losses+pushes;
+    const pct = total? wins/(wins+losses||1) : 0;
+    return { phone, name:u?.name||"Unknown", favTeam:u?.favTeam, wins, losses, pushes, pct, paused: isPausedNow(lg, phone) };
+  });
+  rows.sort((a,b)=> b.pct-a.pct || b.wins-a.wins || a.losses-b.losses || a.name.localeCompare(b.name));
+  return rows;
+}
+
+/* =========================================================================
+   RENDERING
+   ========================================================================= */
+let INITIAL_SYNC_DONE = false;
+function onDbUpdate(){
+  if(SESSION_PHONE && !DB.users[SESSION_PHONE]){
+    // account no longer exists (fresh db) -> sign out silently
+    SESSION_PHONE = null; localStorage.removeItem("pickem_session"); sessionStorage.removeItem("pickem_session");
+  }
+  renderRoot();
+  // Scores are only fetched when the app is opened or a tab is manually refreshed (no background
+  // polling) — this covers the "opened the app with a league already remembered" case, once per load.
+  if(!INITIAL_SYNC_DONE && SESSION_PHONE && CURRENT_LEAGUE){
+    INITIAL_SYNC_DONE = true;
+    syncLiveScores();
+  }
+}
+
+function renderRoot(){
+  if(!DB_READY){ return; }
+  const authed = !!currentUser();
+  $("authScreen").classList.toggle("hidden", authed);
+  $("leaguesScreen").classList.toggle("hidden", !authed || !!CURRENT_LEAGUE);
+  $("appScreen").classList.toggle("hidden", !authed || !CURRENT_LEAGUE);
+
+  if(!authed) return;
+
+  if(CURRENT_LEAGUE && !league()){
+    CURRENT_LEAGUE = null; localStorage.removeItem("pickem_league"); sessionStorage.removeItem("pickem_league");
+    renderRoot(); return;
+  }
+
+  if(!CURRENT_LEAGUE){
+    renderLeaguesScreen();
+  } else {
+    renderAppHeader();
+    render();
+  }
+}
+
+function renderLeaguesScreen(){
+  const u = currentUser();
+  $("lgUserName").textContent = u.name;
+  const myLeagues = (u.leagues||[]).map(c=>DB.leagues[c]).filter(Boolean);
+  const pendingLeagues = Object.values(DB.leagues).filter(lg=> (lg.pendingMembers||[]).includes(SESSION_PHONE));
+  const list = $("leaguesList");
+  if(myLeagues.length===0 && pendingLeagues.length===0){
+    list.innerHTML = `<div class="empty-hint">No leagues yet — create one or join with a friend's code.</div>`;
+    return;
+  }
+  const confirmedHtml = myLeagues.map(lg=>{
+    const isC = lg.commish === SESSION_PHONE;
+    return `<div class="league-card" onclick="enterLeague('${lg.code}')">
+      <div>
+        <div class="name">${esc(lg.name)}</div>
+        <div class="meta">${lg.members.length} member${lg.members.length===1?"":"s"} · Week ${lg.settings.week} · ${lg.code}</div>
+      </div>
+      ${isC?'<span class="commish-chip">Commish</span>':''}
+    </div>`;
+  }).join("");
+  const pendingHtml = pendingLeagues.map(lg=>`<div class="league-card" style="opacity:.6;cursor:default">
+      <div>
+        <div class="name">${esc(lg.name)}</div>
+        <div class="meta">Waiting for the commissioner to accept you · ${lg.code}</div>
+      </div>
+      <span class="commish-chip" style="background:var(--push);color:#04101f">PENDING</span>
+    </div>`).join("");
+  list.innerHTML = confirmedHtml + pendingHtml;
+}
+
+function renderAppHeader(){
+  const lg = league(), u = currentUser();
+  $("hdrLeagueName").textContent = lg.name;
+  $("hdrUserName").textContent = u.name.split(" ")[0];
+  $("hdrAvatar").textContent = initials(u.name);
+  const anyLive = weekGames().some(g=>g.status==="live");
+  $("liveDot").classList.toggle("hidden", !anyLive);
+  syncAutoWeek();
+  maybeAutoGenerate();
+  maybeShowWeeklyRecap();
+}
+
+// Auto-fills the week's games the first time the commissioner's own session sees an empty
+// week in an auto mode, so nobody has to remember to hit "Generate" — that button stays around
+// only for deliberately re-rolling/topping up afterward. Guarded so it only ever fires once per
+// league+week per session, and only from the commissioner's client (avoids racing writes).
+let AUTO_GENERATED_FOR = null;
+async function maybeAutoGenerate(){
+  const lg = league();
+  if(!lg) return;
+  const mode = lg.settings.pickMode || "manual";
+  if(mode==="manual") return; // manual slates are hand-curated by the commissioner, never auto-filled
+  const wk = lg.settings.week;
+  const key = CURRENT_LEAGUE+":"+wk;
+  if(AUTO_GENERATED_FOR===key) return;
+  AUTO_GENERATED_FOR = key;
+  if((lg.games[wk]||[]).length===0) await generateWeekGames();
+}
+
+function switchTab(tab){ CURRENT_TAB = tab; render(); }
+
+function render(){
+  const lg = league();
+  if(!lg) return;
+  ["navPicks","navLive","navBoard"].forEach(id=>$(id).classList.remove("active"));
+  const navMap = {picks:"navPicks", live:"navLive", board:"navBoard"};
+  $(navMap[CURRENT_TAB]).classList.add("active");
+  const anyLive = weekGames().some(g=>g.status==="live");
+  $("liveDot").classList.toggle("hidden", !anyLive);
+
+  if(CURRENT_TAB==="picks") renderPicksTab();
+  else if(CURRENT_TAB==="live") renderLiveTab();
+  else renderBoardTab();
+}
+
+// Finds the single shared weekly deadline (e.g. "Saturday 10:00 AM") for the "fixedWeekly"
+// deadline mode, anchored to the Monday of whichever week the earliest game falls in.
+function computeFixedWeeklyDeadline(games, dow, timeStr){
+  if(!games.length) return null;
+  let earliest = games[0];
+  games.forEach(g=>{ if(new Date(g.kickoff) < new Date(earliest.kickoff)) earliest = g; });
+  const anchor = new Date(earliest.kickoff);
+  const monday = new Date(anchor);
+  monday.setDate(monday.getDate() - ((anchor.getDay()+6)%7));
+  const deadline = new Date(monday);
+  deadline.setDate(monday.getDate() + ((dow+6)%7));
+  const [hh,mm] = (timeStr||"10:00").split(":").map(Number);
+  deadline.setHours(hh,mm,0,0);
+  return deadline;
+}
+function hoursUntilLock(g, lg){
+  const mode = lg.settings.deadlineMode || "hoursBeforeEach";
+  if(mode==="kickoff") return hoursUntil(g.kickoff);
+  if(mode==="fixedWeekly"){
+    const games = lg.games[lg.settings.week] || [];
+    const dl = computeFixedWeeklyDeadline(games, lg.settings.deadlineDow??6, lg.settings.deadlineTime||"10:00");
+    return dl ? (dl.getTime()-nowMs())/36e5 : hoursUntil(g.kickoff);
+  }
+  return hoursUntil(g.kickoff) - (lg.settings.pickDeadlineHrs??1);
+}
+function isPickLocked(g, lg){ return hoursUntilLock(g, lg) <= 0; }
+
+function lockPillHtml(g){
+  const lg = league();
+  const untilLock = hoursUntilLock(g, lg);
+  if(untilLock <= 0) return `<span class="lock-pill locked">Locked</span>`;
+  if(untilLock <= 6) return `<span class="lock-pill soon">Locks in ${fmtCountdown(untilLock)}</span>`;
+  return `<span class="lock-pill">Locks in ${fmtCountdown(untilLock)}</span>`;
+}
+
+function renderPicksTab(){
+  const lg = league();
+  const viewWeek = VIEWING_WEEK ?? lg.settings.week;
+  const games = weekGamesFor(viewWeek);
+  const isCurrentWeek = viewWeek===lg.settings.week;
+  const myPicks = lg.picks[SESSION_PHONE] || {};
+  let html = `<div class="week-header">
+      <div style="display:flex;align-items:center;gap:6px">
+        <button class="icon-btn" style="width:30px;height:30px" onclick="setViewingWeek(${viewWeek-1})" ${viewWeek<=1?'disabled':''}>‹</button>
+        <h2>Week ${viewWeek}</h2>
+        ${isCurrentWeek ? `<span class="rank-tag" style="background:var(--win);font-size:9.5px;padding:2px 6px">CURRENT</span>` : ''}
+        <button class="icon-btn" style="width:30px;height:30px" onclick="setViewingWeek(${viewWeek+1})" ${viewWeek>=lg.settings.week?'disabled':''}>›</button>
+      </div>
+      <span class="eyebrow">${games.length} game${games.length===1?"":"s"}</span>
+    </div>
+    ${!isCurrentWeek ? `<div class="muted" style="margin-bottom:12px">Viewing a past week — picks here are locked in.</div>` : ''}`;
+
+  if(games.length===0){
+    html += `<div class="empty-hint">${isCommish() ? "No games posted yet — add some from the Live tab." : "No games posted for this week yet."}</div>`;
+  }
+
+  games.forEach(g=>{
+    const revealed = spreadVisible(g);
+    const locked = !revealed || isPickLocked(g, lg);
+    const pick = myPicks[g.id];
+    const cover = computeCover(g);
+    const favSpreadTxt = revealed ? (g.spread<0?g.spread:"+"+g.spread) : "TBD";
+    const dogSpreadTxt = revealed ? (g.spread<0?"+"+(-g.spread):(-g.spread)) : "TBD";
+    const [leftKey, rightKey] = awayHomeOrder(g);
+    const side = {
+      fav: {team:g.fav, spreadTxt:favSpreadTxt, home:g.favIsHome===true, score:g.favScore, rank:g.favRank},
+      dog: {team:g.dog, spreadTxt:dogSpreadTxt, home:g.favIsHome===false, score:g.dogScore, rank:g.dogRank}
+    };
+    const L = side[leftKey], R = side[rightKey];
+
+    // The side you picked gets highlighted (blue before grading, green/red/amber once graded);
+    // the side you didn't pick just greys out. No pick at all leaves both neutral.
+    let leftCls = "", rightCls = "";
+    const outcomeCls = matchedKey => cover==="push" ? "pick-push" : (cover===matchedKey ? "pick-win" : "pick-loss");
+    if(pick===leftKey){ leftCls = cover ? outcomeCls(leftKey) : "selected"; rightCls = "not-chosen"; }
+    else if(pick===rightKey){ rightCls = cover ? outcomeCls(rightKey) : "selected"; leftCls = "not-chosen"; }
+
+    html += `<div class="ticket">
+      <div class="ticket-top">
+        <span class="kickoff-txt">${esc(fmtKickoff(g.kickoff))}</span>
+        <span class="status-chip ${g.status}">${g.status}${g.status==='live' && g.periodLabel ? ` · ${esc(g.periodLabel)}` : ''}</span>
+      </div>
+      <div class="matchup">
+        <div class="team-side">${teamBadgeHtml(L.team,48)}<div class="team-name">${esc(L.team.n)}${rankTag(L.rank)}</div><div class="team-spread">${L.spreadTxt}</div></div>
+        <div class="vs-col"><span class="vs-txt">@</span>${g.status!=="scheduled"?`<span class="score-txt">${L.score??"–"}-${R.score??"–"}</span>`:''}</div>
+        <div class="team-side">${teamBadgeHtml(R.team,48)}<div class="team-name">${esc(R.team.n)}${rankTag(R.rank)}</div><div class="team-spread">${R.spreadTxt}</div></div>
+      </div>
+      <div class="pick-row">
+        <div class="pick-btn ${leftCls} ${locked?'disabled':''}" onclick="setPick('${g.id}','${leftKey}')">
+          <span class="pk-name">${esc(L.team.n)}</span><span class="pk-spread">${L.spreadTxt}</span>
+        </div>
+        <div class="pick-btn ${rightCls} ${locked?'disabled':''}" onclick="setPick('${g.id}','${rightKey}')">
+          <span class="pk-name">${esc(R.team.n)}</span><span class="pk-spread">${R.spreadTxt}</span>
+        </div>
+      </div>
+      ${!revealed ? `<div class="locked-banner">Spread reveals ${esc(new Date(g.spreadRevealAt).toLocaleString(undefined,{weekday:'short',month:'short',day:'numeric'}))} at 12:00 AM</div>` : ''}
+      ${revealed && locked && !cover ? `<div class="locked-banner">${lockPillHtml(g)} · ${pick? "Your pick: "+esc(pick==='fav'?g.fav.n:g.dog.n) : "No pick made"}</div>` : ''}
+      ${revealed && !locked ? `<div class="locked-banner">${lockPillHtml(g)}</div>` : ''}
+      ${locked ? `<div class="who-picked-row">
+        <div class="who-picked-side"><span class="who-picked-label">${esc(L.team.n)}</span><div class="mini-avatar-row">${avatarsHtml(pickersFor(lg, g, leftKey))}</div></div>
+        <div class="who-picked-side"><span class="who-picked-label">${esc(R.team.n)}</span><div class="mini-avatar-row">${avatarsHtml(pickersFor(lg, g, rightKey))}</div></div>
+      </div>` : ''}
+    </div>`;
+  });
+
+  $("tabContent").innerHTML = html;
+}
+
+function renderLiveTab(){
+  const lg = league();
+  const commish = isCommish();
+  const editMode = commish && COMMISH_MODE;
+
+  // Once a week completes and picking rolls to the next one, keep showing last week's final
+  // scores here (instead of the new, empty-looking week) until the new week actually has
+  // something to show — its spreads have been revealed, or this user has already picked it.
+  let displayWeek = lg.settings.week;
+  const curGames = lg.games[displayWeek] || [];
+  const myPicksNow = lg.picks[SESSION_PHONE] || {};
+  const curActive = curGames.some(g=> spreadVisible(g) || myPicksNow[g.id]);
+  if(!editMode && !curActive && displayWeek>1 && weekIsComplete(lg, displayWeek-1)) displayWeek -= 1;
+
+  let games = (lg.games[displayWeek]||[]).slice().sort((a,b)=> new Date(a.kickoff)-new Date(b.kickoff));
+  if(!commish){
+    const myPicks = lg.picks[SESSION_PHONE] || {};
+    games = games.filter(g=> myPicks[g.id]);
+  }
+  // Live games first (most worth watching), then upcoming, finals sink to the bottom;
+  // within each group, kickoff order (already applied above) is preserved.
+  const statusRank = {live:0, scheduled:1, final:2};
+  games = games.slice().sort((a,b)=> statusRank[a.status] - statusRank[b.status]);
+  let html = `<div class="week-header"><h2>Live Scores</h2><span class="eyebrow">Week ${displayWeek}${displayWeek!==lg.settings.week?' · Final':''}</span></div>`;
+
+  if(commish){
+    html += `<div class="commish-mode-toggle ${editMode?'on':''}" onclick="toggleCommishMode()">
+      <div><div>Commissioner Mode</div><div class="cm-hint">${editMode? 'Editing on — add / delete / score entry unlocked' : 'Off — viewing the clean scoreboard like everyone else'}</div></div>
+      <div class="cm-switch ${editMode?'on':''}"><div class="cm-knob"></div></div>
+    </div>`;
+  }
+
+  if(editMode){
+    const mode = lg.settings.pickMode||'manual';
+    if(mode!=='manual'){
+      const modeDesc = mode==='favorites' ? 'favorite-team games first, then fills the rest'
+        : mode==='top25' ? 'ranked Top 25 matchups first, then fills the rest if there aren\'t enough'
+        : `${esc(lg.settings.selectedConference||'your chosen conference')} games first, then fills the rest if there aren't enough`;
+      html += `<div class="add-game-card">
+        <h3>Auto-Fill Week ${lg.settings.week}</h3>
+        <div class="muted" style="margin-bottom:10px">Games fill in automatically — ${modeDesc} toward your ${lg.settings.gamesPerWeek}-game target. Use this button to top back up after a delete, or re-roll for a fresh random mix. Each spread stays hidden as "TBD" (and picks stay locked) until 12:00 AM the Wednesday before that game's kickoff, even if a line is already posted.</div>
+        <button class="btn btn-primary" id="genGamesBtn" onclick="regenerateWeekGames()">⚡ Regenerate / Top Up Week ${lg.settings.week}</button>
+      </div>`;
+    }
+    html += `<div class="add-game-card">
+      <h3>Add a Game${mode!=='manual'?' Manually':''}</h3>
+      <div class="grid2">
+        <div class="field" style="margin-bottom:8px"><input id="agFav" list="teamsList" placeholder="Favorite" autocomplete="off"></div>
+        <div class="field" style="margin-bottom:8px"><input id="agDog" list="teamsList" placeholder="Underdog" autocomplete="off"></div>
+      </div>
+      <div class="grid2">
+        <div class="field" style="margin-bottom:8px"><input id="agSpread" type="number" step="0.5" placeholder="Spread (optional — blank = TBD)"></div>
+        <div class="field" style="margin-bottom:8px"><input id="agKickoff" type="datetime-local"></div>
+      </div>
+      <div class="error-msg" id="agError"></div>
+      <button class="btn btn-outline-accent" onclick="addGame()">Add Game</button>
+    </div>`;
+  }
+
+  if(games.length===0){
+    html += `<div class="empty-hint">${commish? (editMode ? "No games yet — add one above." : "No games posted for this week yet.") : "No live games for your picks this week."}</div>`;
+  }
+
+  games.forEach(g=>{
+    const cover = computeCover(g);
+    const revealed = spreadVisible(g);
+    const favSpreadTxt = revealed ? (g.spread<0?g.spread:"+"+g.spread) : "TBD";
+    const dogSpreadTxt = revealed ? (g.spread<0?"+"+(-g.spread):(-g.spread)) : "TBD";
+    const [leftKey, rightKey] = awayHomeOrder(g);
+    const side = {
+      fav: {team:g.fav, spreadTxt:favSpreadTxt, home:g.favIsHome===true, score:g.favScore, rank:g.favRank},
+      dog: {team:g.dog, spreadTxt:dogSpreadTxt, home:g.favIsHome===false, score:g.dogScore, rank:g.dogRank}
+    };
+    const L = side[leftKey], R = side[rightKey];
+    html += `<div class="ticket ${editMode?'commish-edit':''}">
+      <div class="ticket-top">
+        <span class="kickoff-txt">${esc(fmtKickoff(g.kickoff))}</span>
+        <span class="status-chip ${g.status}">${g.status}${g.status==='live' && g.periodLabel ? ` · ${esc(g.periodLabel)}` : ''}</span>
+      </div>
+      <div class="matchup">
+        <div class="team-side">${teamBadgeHtml(L.team,48)}<div class="team-name">${esc(L.team.n)}${rankTag(L.rank)}${L.home?' <span class="home-tag">HOME</span>':''}</div><div class="team-spread">${L.spreadTxt}</div></div>
+        <div class="vs-col"><span class="vs-txt">SCORE</span><span class="score-txt">${L.score??"–"}-${R.score??"–"}</span></div>
+        <div class="team-side">${teamBadgeHtml(R.team,48)}<div class="team-name">${esc(R.team.n)}${rankTag(R.rank)}${R.home?' <span class="home-tag">HOME</span>':''}</div><div class="team-spread">${R.spreadTxt}</div></div>
+      </div>
+      ${!revealed ? `<div class="locked-banner">Spread reveals ${esc(new Date(g.spreadRevealAt).toLocaleString(undefined,{weekday:'short',month:'short',day:'numeric'}))} at 12:00 AM</div>` : ''}
+      ${cover ? `<div class="cover-banner ${cover==='push'?'push':''}" style="color:${cover==='push'?'':'var(--ink-dim)'}">${cover==='push' ? 'Push' : (cover==='fav'?esc(g.fav.n):esc(g.dog.n))+' covered'}</div>` : ''}
+      ${editMode ? `<div class="commish-panel">
+        <div class="row">
+          <input type="number" step="0.5" placeholder="${revealed?`Spread (${esc(g.fav.n)} e.g. -6.5)`:'Hidden until Wed reveal — type to force early'}" value="${revealed?(g.spread??''):''}" onchange="updateGameField('${g.id}','spread',this.value)">
+        </div>
+        <div class="row">
+          <input type="number" placeholder="${esc(g.fav.n)} score" value="${g.favScore??''}" onchange="updateGameField('${g.id}','favScore',this.value)">
+          <input type="number" placeholder="${esc(g.dog.n)} score" value="${g.dogScore??''}" onchange="updateGameField('${g.id}','dogScore',this.value)">
+        </div>
+        <div class="status-btns">
+          <button class="${g.status==='scheduled'?'active':''}" onclick="updateGameField('${g.id}','status','scheduled')">Scheduled</button>
+          <button class="${g.status==='live'?'active':''}" onclick="updateGameField('${g.id}','status','live')">Live</button>
+          <button class="${g.status==='final'?'active':''}" onclick="updateGameField('${g.id}','status','final')">Final</button>
+        </div>
+        <button class="link-btn" style="color:var(--loss);margin-top:6px" onclick="confirmDeleteGame('${g.id}','${esc(g.fav.n)} vs ${esc(g.dog.n)}')">Delete game</button>
+      </div>` : ''}
+    </div>`;
+  });
+
+  $("tabContent").innerHTML = html;
+}
+
+function renderBoardTab(){
+  const lg = league();
+  const viewWeek = LEADERBOARD_VIEWING_WEEK; // null = "Leaderboard" (season standings through today)
+  const effectiveWeek = viewWeek ?? lg.settings.week;
+  const rows = computeStandings(lg, effectiveWeek);
+  const weekOptions = completedWeeks(lg);
+
+  let html = `<div class="week-header">
+    <select class="week-select" onchange="setLeaderboardWeek(this.value==='current'?null:parseInt(this.value,10))">
+      <option value="current" ${viewWeek==null?'selected':''}>Leaderboard</option>
+      ${weekOptions.map(w=>`<option value="${w}" ${viewWeek===w?'selected':''}>Week ${w}</option>`).join('')}
+    </select>
+    <div class="icon-btn" onclick="openSettings()" style="position:relative">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      ${isCommish() && (lg.pendingMembers||[]).length ? `<span style="position:absolute;top:-3px;right:-3px;width:9px;height:9px;border-radius:50%;background:var(--loss);border:1.5px solid var(--card-bg,#fff)"></span>` : ''}
+    </div>
+  </div>
+  <div class="muted" style="margin-bottom:14px">${viewWeek==null ? 'Season standings through today.' : `Standings through the end of Week ${viewWeek}.`}</div>`;
+
+  if(rows.length===0){
+    html += `<div class="empty-hint">No standings yet.</div>`;
+  } else {
+    const top3 = rows.slice(0,3);
+    if(top3.length===3){
+      const order = [top3[1], top3[0], top3[2]];
+      const cls = ["silver","gold","bronze"];
+      html += `<div class="podium-row">`;
+      order.forEach((r,i)=>{
+        html += `<div class="podium-slot ${cls[i]}">
+          ${teamBadgeHtml(r.favTeam, 44, r.name, "pav")}
+          <div class="pname">${esc(r.name.split(' ')[0])}</div>
+          <div class="podium-bar">${r.wins}-${r.losses}</div>
+        </div>`;
+      });
+      html += `</div>`;
+    }
+    html += rows.map((r,i)=>{
+      const me = r.phone===SESSION_PHONE;
+      return `<div class="lb-row ${me?'me':''}">
+        <div class="lb-rank">${i+1}</div>
+        ${teamBadgeHtml(r.favTeam,34,r.name,"lb-fav")}
+        <div class="lb-info">
+          <div class="lb-name">${esc(r.name)}${me?' (you)':''}${r.paused?' <span style="color:var(--loss);font-weight:800;font-size:10.5px">⏸ PAUSED</span>':''}</div>
+          <div class="lb-sub">${esc(r.favTeam?.n||'—')}</div>
+        </div>
+        <div class="lb-record">
+          <div class="lb-pct">${(r.pct*100).toFixed(0)}%</div>
+          <div class="lb-wl">${r.wins}-${r.losses}-${r.pushes}</div>
+        </div>
+      </div>`;
+    }).join("");
+  }
+
+  // Selecting a specific week embeds that week's recap right at the bottom, in place.
+  if(viewWeek!=null){
+    const games = (lg.games[viewWeek]||[]).slice().sort((a,b)=> new Date(a.kickoff)-new Date(b.kickoff));
+    html += `<div class="recap-inline-divider"><div class="recap-inline-title">Week ${viewWeek} Recap</div>${games.map(g=>recapGameHtml(lg,g)).join('') || `<div class="empty-hint">No games that week.</div>`}</div>`;
+  }
+
+  $("tabContent").innerHTML = html;
+}
+
+/* =========================================================================
+   MODALS
+   ========================================================================= */
+function openModal(which){
+  const root = $("modalRoot");
+  if(which==="createLeagueModal"){
+    root.innerHTML = `<div class="modal-backdrop" onclick="if(event.target===this)closeModal()">
+      <div class="modal-sheet"><div class="modal-handle"></div>
+        <div class="modal-title">Create a League</div>
+        <div class="muted" style="margin-bottom:16px">You'll be commissioner — every rule below is required up front so there's no ambiguity later. You can still change all of it afterward in Commissioner Mode.</div>
+
+        <div class="field" style="margin-bottom:14px"><label>League Name</label><input id="clName" type="text" placeholder="e.g. The Boys Pick'em"></div>
+        <div class="field" style="margin-bottom:14px"><label>Games / Week</label><input id="stGamesPerWeek" type="number" placeholder="e.g. 10"></div>
+
+        <div class="field" style="margin-bottom:8px">
+          <label>Weekly Game Selection</label>
+          <select id="stPickMode" onchange="renderPickModeDesc()">
+            <option value="" selected>— Choose a mode —</option>
+            <option value="manual">Manual — I add every game myself</option>
+            <option value="favorites">Favorite Teams</option>
+            <option value="conferences">Choose Conference</option>
+            <option value="top25">Top 25 Matchups</option>
+          </select>
+        </div>
+        <div id="pickModeDescWrap"></div>
+
+        <div class="field" style="margin-bottom:8px">
+          <label>Pick Deadline</label>
+          <select id="stDeadlineMode" onchange="renderDeadlineFields()">
+            <option value="" selected>— Choose a deadline —</option>
+            <option value="hoursBeforeEach">A timer before each kickoff</option>
+            <option value="fixedWeekly">One fixed day &amp; time each week</option>
+            <option value="kickoff">Right at kickoff</option>
+          </select>
+        </div>
+        <div id="deadlineFieldsWrap"></div>
+
+        <div class="error-msg" id="clError"></div>
+        <button class="btn btn-primary" onclick="createLeague()">Create — you'll be commissioner</button>
+      </div></div>`;
+  } else if(which==="joinLeagueModal"){
+    root.innerHTML = `<div class="modal-backdrop" onclick="if(event.target===this)closeModal()">
+      <div class="modal-sheet"><div class="modal-handle"></div>
+        <div class="modal-title">Join a League</div>
+        <div class="field"><label>League Code</label><input id="jlCode" type="text" placeholder="e.g. 7K3PXQ" style="text-transform:uppercase;letter-spacing:.08em" maxlength="6"></div>
+        <div class="error-msg" id="jlError"></div>
+        <button class="btn btn-primary" onclick="joinLeague()">Join League</button>
+      </div></div>`;
+  }
+}
+function closeModal(){ $("modalRoot").innerHTML = ""; }
+
+function deadlineFieldsHtml(mode, lg){
+  if(mode==="fixedWeekly"){
+    const days=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+    return `<div class="grid2">
+        <div class="field" style="margin-bottom:8px"><label>Day</label>
+          <select id="stDeadlineDow">${days.map((d,i)=>`<option value="${i}" ${((lg.settings.deadlineDow??6)===i)?'selected':''}>${d}</option>`).join('')}</select>
+        </div>
+        <div class="field" style="margin-bottom:8px"><label>Time</label><input id="stDeadlineTime" type="time" value="${lg.settings.deadlineTime||'10:00'}"></div>
+      </div>
+      <div class="muted" style="margin-bottom:14px">All picks for the week lock at this single day/time, no matter when each game kicks off.</div>`;
+  }
+  if(mode==="kickoff"){
+    return `<div class="muted" style="margin-bottom:14px">Each pick locks the instant that specific game kicks off — no buffer.</div>`;
+  }
+  return `<div class="field" style="margin-bottom:14px"><label>Hours Before Kickoff</label><input id="stPickDeadline" type="number" step="0.5" value="${lg.settings.pickDeadlineHrs??1}"></div>`;
+}
+function renderDeadlineFields(){
+  const mode = $("stDeadlineMode").value;
+  $("deadlineFieldsWrap").innerHTML = mode ? deadlineFieldsHtml(mode, league() || {settings:{}}) : "";
+}
+function pickModeDescHtml(mode){
+  if(mode==="favorites") return `Hitting "Generate" on the Live tab first pulls in any real game featuring a member's favorite team — even before a line is posted — then randomly fills the rest toward your target. The fill innately balances across Friday Night, Saturday Noon, Saturday Afternoon, and Saturday Primetime slots instead of clumping into one window.`;
+  if(mode==="conferences") return `Hitting "Generate" only pulls games from the conference you pick below — a member's favorite team playing in that conference is always guaranteed a spot, and the rest fills in from other games in that conference. If there aren't enough to hit your target, you'll just get fewer games that week.`;
+  if(mode==="top25") return `Hitting "Generate" fills the week with ranked Top 25 matchups first; if there aren't enough yet, it tops up with other live games.`;
+  return `You add every game by hand from the Live tab.`;
+}
+function conferenceSelectHtml(id, current){
+  const confs = Object.keys(CONFERENCE_GROUPS);
+  const sel = current || confs[0];
+  return `<div class="field" style="margin-bottom:10px"><label>Conference</label>
+    <select id="${id}">${confs.map(c=>`<option value="${esc(c)}" ${sel===c?'selected':''}>${esc(c)}</option>`).join('')}</select>
+  </div>`;
+}
+function pickModeExtraHtml(mode, lg){
+  if(mode==="conferences"){
+    return conferenceSelectHtml("stConference", lg.settings.selectedConference);
+  }
+  if(mode==="favorites"){
+    const pref = lg.settings.favoritesRankPref || "";
+    return `<div class="field" style="margin-bottom:10px"><label>Ranked Game Preference (optional)</label>
+      <select id="stRankPref">
+        <option value="" ${pref===""?'selected':''}>No preference</option>
+        <option value="top25Both" ${pref==='top25Both'?'selected':''}>Top 25 vs Top 25</option>
+        <option value="top25Either" ${pref==='top25Either'?'selected':''}>Either team Top 25</option>
+        <option value="top10Single" ${pref==='top10Single'?'selected':''}>Either team Top 10</option>
+      </select>
+    </div>
+    <div class="muted" style="margin-bottom:10px">This skews the odds toward matching games — it's still a random draw, so a non-matching game can still get picked, just much less often.</div>`;
+  }
+  return "";
+}
+function renderPickModeDesc(){
+  const mode = $("stPickMode").value;
+  $("pickModeDescWrap").innerHTML = mode ? `<div class="muted" style="margin-bottom:10px">${pickModeDescHtml(mode)}</div>${pickModeExtraHtml(mode, league() || {settings:{}})}` : "";
+}
+
+function pickModeLabel(mode){
+  return {manual:"Manual", favorites:"Favorite Teams", conferences:"Choose Conference", top25:"Top 25 Matchups"}[mode] || "Manual";
+}
+function deadlineModeLabel(lg){
+  const m = lg.settings.deadlineMode || "hoursBeforeEach";
+  if(m==="kickoff") return "Right at kickoff";
+  if(m==="fixedWeekly"){
+    const days = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+    return `${days[lg.settings.deadlineDow??6]} ${lg.settings.deadlineTime||"10:00"}`;
+  }
+  return `${lg.settings.pickDeadlineHrs??1}h before kickoff`;
+}
+
+function openSettings(){
+  renderSettingsModal();
+  // Pick up any new join requests (or anything else) that landed since this was last opened.
+  refreshFromServer().then(()=>{ if($("modalRoot").innerHTML.trim()!=="") renderSettingsModal(); });
+}
+function renderSettingsModal(){
+  const lg = league(), u = currentUser(), commish = isCommish();
+  const root = $("modalRoot");
+  root.innerHTML = `<div class="modal-backdrop" onclick="if(event.target===this)closeModal()">
+    <div class="modal-sheet"><div class="modal-handle"></div>
+      <div class="modal-title">${esc(lg.name)}</div>
+
+      <div class="settings-section">
+        <h4>Invite Friends</h4>
+        <div class="code-display"><span class="code">${lg.code}</span><button class="btn btn-ghost btn-sm" onclick="navigator.clipboard.writeText('${lg.code}');showToast('Code copied')">Copy</button></div>
+      </div>
+
+      ${commish && COMMISH_MODE ? `<div class="settings-section">
+        <h4>League Rules — Commissioner</h4>
+
+        <div class="field" style="margin-bottom:14px"><label>Games / Week</label><input id="stGamesPerWeek" type="number" value="${lg.settings.gamesPerWeek}"></div>
+
+        <div class="field" style="margin-bottom:14px">
+          <label>Current Week</label>
+          <div class="muted" style="margin-bottom:6px">${lg.settings.weekOverride ? 'Set manually' : "Auto-detected from today's date"} — currently Week ${lg.settings.week}</div>
+          ${lg.settings.weekOverride
+            ? `<div style="display:flex;gap:8px;align-items:center"><input id="stWeek" type="number" value="${lg.settings.week}" style="flex:1"><button class="link-btn" onclick="disableWeekOverride()">Back to auto</button></div>`
+            : `<button class="link-btn" style="padding-left:0" onclick="enableWeekOverride()">Set manually instead</button>`}
+        </div>
+
+        <div class="field" style="margin-bottom:8px">
+          <label>Pick Deadline</label>
+          <select id="stDeadlineMode" onchange="renderDeadlineFields()">
+            <option value="hoursBeforeEach" ${(lg.settings.deadlineMode||'hoursBeforeEach')==='hoursBeforeEach'?'selected':''}>A timer before each kickoff</option>
+            <option value="fixedWeekly" ${lg.settings.deadlineMode==='fixedWeekly'?'selected':''}>One fixed day &amp; time each week</option>
+            <option value="kickoff" ${lg.settings.deadlineMode==='kickoff'?'selected':''}>Right at kickoff</option>
+          </select>
+        </div>
+        <div id="deadlineFieldsWrap">${deadlineFieldsHtml(lg.settings.deadlineMode||'hoursBeforeEach', lg)}</div>
+
+        <div class="field" style="margin-bottom:8px">
+          <label>Weekly Game Selection</label>
+          <select id="stPickMode" onchange="renderPickModeDesc()">
+            <option value="manual" ${(lg.settings.pickMode||'manual')==='manual'?'selected':''}>Manual — I add every game myself</option>
+            <option value="favorites" ${lg.settings.pickMode==='favorites'?'selected':''}>Favorite Teams</option>
+            <option value="conferences" ${lg.settings.pickMode==='conferences'?'selected':''}>Choose Conference</option>
+            <option value="top25" ${lg.settings.pickMode==='top25'?'selected':''}>Top 25 Matchups</option>
+          </select>
+        </div>
+        <div id="pickModeDescWrap"><div class="muted" style="margin-bottom:10px">${pickModeDescHtml(lg.settings.pickMode||'manual')}</div>${pickModeExtraHtml(lg.settings.pickMode||'manual', lg)}</div>
+
+        <button class="btn btn-outline-accent" style="margin-top:4px" onclick="saveSettings()">Save Rules</button>
+      </div>
+
+      ${(lg.pendingMembers||[]).length ? `<div class="settings-section">
+        <h4>Requests (${lg.pendingMembers.length})</h4>
+        ${lg.pendingMembers.map(phone=>{
+          const pu = DB.users[phone];
+          return `<div class="settings-list-item" style="cursor:default">
+            <span>${esc(pu?.name||'Unknown')}${pu?.favTeam?.n?` <span class="muted" style="font-size:11.5px">— ${esc(pu.favTeam.n)}</span>`:''}</span>
+            <span style="display:flex;gap:8px">
+              <button class="link-btn" style="color:var(--win)" onclick="acceptJoinRequest('${lg.code}','${phone}')">Accept</button>
+              <button class="link-btn" style="color:var(--loss)" onclick="declineJoinRequest('${lg.code}','${phone}')">Decline</button>
+            </span>
+          </div>`;
+        }).join('')}
+      </div>` : ''}
+
+      <div class="settings-section">
+        <h4>Members</h4>
+        ${lg.members.map(phone=>{
+          const mu = DB.users[phone];
+          const isMe = phone===lg.commish;
+          const paused = isPausedNow(lg, phone);
+          const hasHistory = lg.paused && lg.paused[phone] && lg.paused[phone].length>0;
+          return `<div class="settings-list-item" style="cursor:default">
+            <span>${esc(mu?.name||'Unknown')}${isMe?' (you)':''}${paused?' <span style="color:var(--loss);font-weight:800;font-size:10.5px">⏸ PAUSED</span>':''}</span>
+            ${!isMe ? `<span style="display:flex;gap:8px;align-items:center">
+              ${paused
+                ? `<button class="link-btn" onclick="unpauseMember('${phone}')">Unpause</button>`
+                : `<button class="link-btn" style="color:var(--loss)" onclick="pauseMember('${phone}')">Pause</button>`}
+              ${hasHistory ? `<button class="link-btn" style="color:var(--ink-faint)" onclick="confirmClearPause('${phone}','${esc(mu?.name||'')}')">Reset</button>` : ''}
+            </span>` : ''}
+          </div>`;
+        }).join('')}
+        <div class="muted" style="margin-top:8px">Pausing marks someone's unfinished weeks as automatic losses (e.g. hasn't paid yet) — fully reversible with Unpause or Reset.</div>
+      </div>` : commish ? `<div class="settings-section">
+        <h4>League Rules</h4>
+        <div class="muted" style="margin-bottom:10px">Turn on Commissioner Mode (Live tab) to edit rules or manage members.</div>
+        <div class="settings-list-item" style="cursor:default"><span>Games / Week</span><span>${lg.settings.gamesPerWeek}</span></div>
+        <div class="settings-list-item" style="cursor:default"><span>Current Week</span><span>${lg.settings.week}${lg.settings.weekOverride?' (manual)':' (auto)'}</span></div>
+        <div class="settings-list-item" style="cursor:default"><span>Pick Deadline</span><span>${esc(deadlineModeLabel(lg))}</span></div>
+        <div class="settings-list-item" style="cursor:default"><span>Weekly Game Selection</span><span>${esc(pickModeLabel(lg.settings.pickMode))}${lg.settings.pickMode==='conferences'&&lg.settings.selectedConference?' — '+esc(lg.settings.selectedConference):''}</span></div>
+      </div>` : `<div class="settings-section muted">Commissioner: ${esc(DB.users[lg.commish]?.name||'—')}</div>`}
+
+      <div class="settings-section">
+        <h4>Notifications</h4>
+        <label class="settings-list-item" style="cursor:pointer">
+          <span>Browser push (this device)</span>
+          <input type="checkbox" id="notifPushToggle" ${u.notifPrefs?.push?'checked':''} onchange="toggleBrowserPush(this.checked)">
+        </label>
+        <div class="muted" style="margin:0 0 12px">Free, no setup — alerts you right on this device while the app is open, e.g. when one of your picked games goes final. Your browser will ask permission the first time.</div>
+        <label class="settings-list-item" style="cursor:pointer">
+          <span>Email updates</span>
+          <input type="checkbox" id="notifEmailToggle" ${u.notifPrefs?.email?.enabled?'checked':''} onchange="toggleEmailNotif(this.checked)">
+        </label>
+        <div id="notifEmailWrap">${u.notifPrefs?.email?.enabled ? `<div class="field" style="margin:8px 0 4px"><input id="notifEmailAddress" type="email" placeholder="you@email.com" value="${esc(u.notifPrefs.email.address||'')}" onblur="saveNotifEmail()"></div>` : ''}</div>
+        <div class="muted">Saved either way, but actually sending real emails needs a small one-time backend step, similar to the Firebase setup — just ask and I'll wire it up whenever you're ready.</div>
+      </div>
+
+      <div class="settings-section">
+        <h4>Account</h4>
+        <div class="settings-list-item" onclick="closeModal();openWeeklyRecap()">Weekly Recap</div>
+        <div class="settings-list-item" onclick="closeModal();goToLeagues()">Switch League</div>
+        <div class="settings-list-item danger" onclick="closeModal();signOut()">Sign Out</div>
+      </div>
+    </div></div>`;
+}
+async function toggleBrowserPush(checked){
+  if(checked){
+    if(!("Notification" in window)){ showToast("This browser doesn't support notifications."); checked=false; }
+    else{
+      const perm = await Notification.requestPermission();
+      if(perm!=="granted"){ showToast("Notifications blocked — allow them in your browser settings to turn this on."); checked=false; }
+    }
+  }
+  await mutate(draft=>{
+    const du = draft.users[SESSION_PHONE];
+    du.notifPrefs = du.notifPrefs || {};
+    du.notifPrefs.push = checked;
+  });
+  if(checked) new Notification("The Line", {body:"You're set — we'll notify you here for things like your picked games going final while the app is open."});
+  openSettings();
+}
+async function toggleEmailNotif(checked){
+  await mutate(draft=>{
+    const du = draft.users[SESSION_PHONE];
+    du.notifPrefs = du.notifPrefs || {};
+    du.notifPrefs.email = du.notifPrefs.email || {enabled:false, address:""};
+    du.notifPrefs.email.enabled = checked;
+  });
+  openSettings();
+}
+async function saveNotifEmail(){
+  const val = $("notifEmailAddress").value.trim();
+  await mutate(draft=>{
+    const du = draft.users[SESSION_PHONE];
+    du.notifPrefs.email.address = val;
+  });
+  showToast("Email saved.");
+}
+
+/* =========================================================================
+   INIT
+   ========================================================================= */
+function populateTeamsDatalist(){
+  $("teamsList").innerHTML = TEAMS.map(t=>`<option value="${esc(t.n)}">`).join("");
+}
+
+function tickCountdowns(){
+  if(!$("appScreen").classList.contains("hidden") && (CURRENT_TAB==="picks" || CURRENT_TAB==="board")) render();
+}
+
+// Pull-to-refresh: drag down from the top of any tab to force an immediate score sync. There's
+// no background polling — scores are only fetched on app open or this manual refresh. Uses
+// pointer events so it works for touch and mouse.
+function setupPullToRefresh(){
+  const el = $("tabContent");
+  let startY = null, dragging = false, triggered = false;
+  const reset = ()=>{ dragging = false; startY = null; el.style.transform = ""; };
+  el.addEventListener("pointerdown", (e)=>{
+    // Works on all three tabs now — Picks and Leaderboard both display data (cover results,
+    // standings) that depends on the same live scores Live tab shows.
+    if(el.scrollTop>0) return;
+    startY = e.clientY; dragging = true; triggered = false;
+  });
+  el.addEventListener("pointermove", (e)=>{
+    if(!dragging || startY==null) return;
+    const dy = e.clientY - startY;
+    if(dy>0 && el.scrollTop<=0){
+      el.style.transform = `translateY(${Math.min(dy*0.4,60)}px)`;
+      if(dy>140 && !triggered){
+        triggered = true;
+        showToast("Refreshing…", 1500);
+        refreshFromServer();
+        syncLiveScores();
+      }
+    } else {
+      reset();
+    }
+  });
+  el.addEventListener("pointerup", reset);
+  el.addEventListener("pointercancel", reset);
+  el.addEventListener("pointerleave", reset);
+}
+
+document.addEventListener("DOMContentLoaded", ()=>{
+  populateTeamsDatalist();
+  initFirebase();
+  setupPullToRefresh();
+  setInterval(tickCountdowns, 30000);
+  setInterval(checkPickReminders, 30000);
+  setInterval(checkScheduledRefresh, 30000);
+});
+</script>
+</body>
+</html>
