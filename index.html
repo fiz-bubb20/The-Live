@@ -284,6 +284,21 @@
     100%{left:100%;}
   }
 
+  /* Pull-to-refresh spinner: fades/scales in as you drag down, spins while a refresh is
+     actually in flight, then fades back out — same shape as a native pull-to-refresh. */
+  .pull-spinner{
+    position:fixed;top:14px;left:50%;transform:translateX(-50%) scale(.4);
+    width:26px;height:26px;z-index:150;opacity:0;pointer-events:none;
+    transition:opacity .15s, transform .15s;
+  }
+  .pull-spinner.visible{opacity:1;transform:translateX(-50%) scale(1);}
+  .pull-spinner-ring{
+    width:100%;height:100%;border-radius:50%;
+    border:3px solid var(--line);border-top-color:var(--ink-dim);
+  }
+  .pull-spinner.spinning .pull-spinner-ring{animation:pull-spin .7s linear infinite;}
+  @keyframes pull-spin{ to{ transform:rotate(360deg); } }
+
   /* ---------- settings sheet ---------- */
   .settings-section{margin-bottom:20px;}
   .settings-section h4{font-size:11.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:10px;}
@@ -304,6 +319,7 @@
 <div class="shell" id="shell">
 
   <div id="globalLoadingBar" class="loading-bar hidden"></div>
+  <div id="pullSpinner" class="pull-spinner"><div class="pull-spinner-ring"></div></div>
 
   <!-- ============ AUTH ============ -->
   <div id="authScreen">
@@ -2432,8 +2448,12 @@ function tickCountdowns(){
 // all three in-league tabs), not just the tabs — each one gets its own appropriate refresh action.
 function attachPullToRefresh(el, onRefresh){
   if(!el) return;
+  const spinner = $("pullSpinner");
   let startY = null, dragging = false, triggered = false;
-  const reset = ()=>{ dragging = false; startY = null; el.style.transform = ""; };
+  const reset = ()=>{
+    dragging = false; startY = null; el.style.transform = "";
+    if(spinner){ spinner.classList.remove("visible","spinning"); }
+  };
   el.addEventListener("pointerdown", (e)=>{
     if(el.scrollTop>0) return;
     startY = e.clientY; dragging = true; triggered = false;
@@ -2442,24 +2462,28 @@ function attachPullToRefresh(el, onRefresh){
     if(!dragging || startY==null) return;
     const dy = e.clientY - startY;
     if(dy>0 && el.scrollTop<=0){
-      el.style.transform = `translateY(${Math.min(dy*0.4,60)}px)`;
+      const pull = Math.min(dy*0.4,60);
+      el.style.transform = `translateY(${pull}px)`;
+      if(spinner) spinner.classList.toggle("visible", dy>16);
       if(dy>140 && !triggered){
         triggered = true;
-        showToast("Refreshing…", 1500);
-        onRefresh();
+        if(spinner) spinner.classList.add("spinning");
+        // Hold the pulled-down spinner until the refresh actually finishes, not just until
+        // the finger lifts — that's the "still reloading" feedback being asked for here.
+        Promise.resolve(onRefresh()).finally(reset);
       }
     } else {
       reset();
     }
   });
-  el.addEventListener("pointerup", reset);
-  el.addEventListener("pointercancel", reset);
-  el.addEventListener("pointerleave", reset);
+  el.addEventListener("pointerup", ()=>{ if(!triggered) reset(); });
+  el.addEventListener("pointercancel", ()=>{ if(!triggered) reset(); });
+  el.addEventListener("pointerleave", ()=>{ if(!triggered) reset(); });
 }
 function setupPullToRefresh(){
   attachPullToRefresh($("authScreen"), ()=> refreshFromServer());
   attachPullToRefresh($("leaguesScreen"), ()=> refreshFromServer().then(()=>{ if(!$("leaguesScreen").classList.contains("hidden")) renderLeaguesScreen(); }));
-  attachPullToRefresh($("tabContent"), ()=>{ refreshFromServer(); syncLiveScores(); });
+  attachPullToRefresh($("tabContent"), ()=> Promise.all([refreshFromServer(), syncLiveScores()]));
 }
 
 document.addEventListener("DOMContentLoaded", ()=>{
