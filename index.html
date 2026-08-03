@@ -1558,6 +1558,35 @@ function confirmClearPause(phone, name){
     </div>
   </div>`;
 }
+// Commissioner-only escape hatch for a forgotten password — there's no email/SMS flow behind
+// this app, so the commissioner just sets a new password directly and relays it to the member
+// themselves (shown back in the confirmation toast so it's easy to copy/text over).
+function confirmResetPassword(phone, name){
+  const root = $("modalRoot");
+  root.innerHTML = `<div class="modal-backdrop center" onclick="if(event.target===this)closeModal()">
+    <div class="modal-sheet">
+      <div class="modal-title">Reset ${esc(name)}'s password</div>
+      <div class="muted" style="margin-bottom:14px">Set a new password for them — there's no email involved, so you'll need to tell them what it is.</div>
+      <div class="field" style="margin-bottom:4px"><label>New Password</label><input id="rpNewPass" type="text" placeholder="At least 4 characters" autocomplete="off"></div>
+      <div class="error-msg" id="rpError"></div>
+      <div style="display:flex;gap:10px">
+        <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="submitResetPassword('${phone}')">Reset Password</button>
+      </div>
+    </div>
+  </div>`;
+}
+async function submitResetPassword(phone){
+  const val = $("rpNewPass").value;
+  const err = $("rpError");
+  if(!val || val.length<4) return err.textContent = "Password must be at least 4 characters.";
+  const passwordHash = await sha256(val + ":" + phone);
+  await mutate(draft=>{
+    draft.users[phone].passwordHash = passwordHash;
+  });
+  showToast(`Password reset for ${DB.users[phone]?.name||'member'} — tell them it's: ${val}`, 4500);
+  openSettings();
+}
 function confirmDeleteGame(gameId, matchupLabel){
   const root = $("modalRoot");
   root.innerHTML = `<div class="modal-backdrop center" onclick="if(event.target===this)closeModal()">
@@ -2382,6 +2411,7 @@ function renderSettingsModal(){
                 ? `<button class="link-btn" onclick="unpauseMember('${phone}')">Unpause</button>`
                 : `<button class="link-btn" style="color:var(--loss)" onclick="pauseMember('${phone}')">Pause</button>`}
               ${hasHistory ? `<button class="link-btn" style="color:var(--ink-faint)" onclick="confirmClearPause('${phone}','${esc(mu?.name||'')}')">Reset</button>` : ''}
+              <button class="link-btn" style="color:var(--ink-faint)" onclick="confirmResetPassword('${phone}','${esc(mu?.name||'')}')">Reset Password</button>
             </span>` : ''}
           </div>`;
         }).join('')}
