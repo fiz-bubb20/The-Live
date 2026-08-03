@@ -493,6 +493,7 @@ function setGlobalBusy(on){
 async function mutate(mutator){
   if(!docRef) return;
   setGlobalBusy(true);
+  let finalDraft = null;
   try{
     await fbDb.runTransaction(async (tx)=>{
       const snap = await tx.get(docRef);
@@ -501,7 +502,12 @@ async function mutate(mutator){
       draft.leagues = draft.leagues || {};
       mutator(draft);
       tx.set(docRef, draft);
+      finalDraft = draft; // captures whichever attempt actually wins, in case Firestore retries this callback
     });
+    if(finalDraft){
+      DB = finalDraft;
+      onDbUpdate();
+    }
   } finally {
     setGlobalBusy(false);
   }
