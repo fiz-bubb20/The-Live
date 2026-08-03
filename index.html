@@ -179,6 +179,7 @@
   .team-side{flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;padding:6px 8px;}
   .team-side img,.team-side .badge-fallback{width:48px;height:48px;font-size:16px;}
   .team-name{font-size:13px;font-weight:800;text-align:center;line-height:1.2;}
+  .team-name.my-pick{color:var(--accent-2);font-weight:900;text-shadow:0 0 10px rgba(159,224,255,.35);}
   .home-tag{font-size:8.5px;font-weight:800;letter-spacing:.04em;color:var(--ink-faint);background:var(--navy-700);border-radius:4px;padding:1px 4px;vertical-align:middle;}
   .rank-tag{font-size:8.5px;font-weight:900;letter-spacing:.02em;color:#04101f;background:var(--accent);border-radius:4px;padding:1px 4px;vertical-align:middle;}
 
@@ -2110,15 +2111,16 @@ function renderLiveTab(){
       dog: {team:g.dog, spreadTxt:dogSpreadTxt, home:g.favIsHome===false, score:g.dogScore, rank:g.dogRank}
     };
     const L = side[leftKey], R = side[rightKey];
+    const myPick = myPicksNow[g.id]; // highlight whichever side is your own pick, so it's obvious at a glance
     html += `<div class="ticket ${editMode?'commish-edit':''}">
       <div class="ticket-top">
         <span class="kickoff-txt">${esc(fmtKickoff(g.kickoff))}</span>
         <span class="status-chip ${g.status}">${g.status}${g.status==='live' && g.periodLabel ? ` · ${esc(g.periodLabel)}` : ''}</span>
       </div>
       <div class="matchup">
-        <div class="team-side">${teamBadgeHtml(L.team,48)}<div class="team-name">${esc(L.team.n)}${rankTag(L.rank)}${L.home?' <span class="home-tag">HOME</span>':''}</div><div class="team-spread">${L.spreadTxt}</div></div>
+        <div class="team-side">${teamBadgeHtml(L.team,48)}<div class="team-name${myPick===leftKey?' my-pick':''}">${esc(L.team.n)}${rankTag(L.rank)}${L.home?' <span class="home-tag">HOME</span>':''}</div><div class="team-spread">${L.spreadTxt}</div></div>
         <div class="vs-col"><span class="vs-txt">SCORE</span><span class="score-txt">${L.score??"–"}-${R.score??"–"}</span></div>
-        <div class="team-side">${teamBadgeHtml(R.team,48)}<div class="team-name">${esc(R.team.n)}${rankTag(R.rank)}${R.home?' <span class="home-tag">HOME</span>':''}</div><div class="team-spread">${R.spreadTxt}</div></div>
+        <div class="team-side">${teamBadgeHtml(R.team,48)}<div class="team-name${myPick===rightKey?' my-pick':''}">${esc(R.team.n)}${rankTag(R.rank)}${R.home?' <span class="home-tag">HOME</span>':''}</div><div class="team-spread">${R.spreadTxt}</div></div>
       </div>
       ${!revealed ? `<div class="locked-banner">Spread reveals ${esc(new Date(g.spreadRevealAt).toLocaleString(undefined,{weekday:'short',month:'short',day:'numeric'}))} at 12:00 AM</div>` : ''}
       ${cover ? `<div class="cover-banner ${cover==='push'?'push':''}" style="color:${cover==='push'?'':'var(--ink-dim)'}">${cover==='push' ? 'Push' : (cover==='fav'?esc(g.fav.n):esc(g.dog.n))+' covered'}</div>` : ''}
