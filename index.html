@@ -94,7 +94,7 @@
   .team-picker-row input{flex:1;background:none;border:none;color:var(--ink);font-size:15px;outline:none;padding:3px 0;}
 
   /* ---------- badges / logos ---------- */
-  .badge{border-radius:999px;object-fit:contain;background:var(--navy-900);flex-shrink:0;}
+  .badge{border-radius:999px;object-fit:contain;background:#f2f4f8;flex-shrink:0;}
   .badge-fallback{
     border-radius:999px;display:flex;align-items:center;justify-content:center;
     font-weight:900;color:#fff;flex-shrink:0;letter-spacing:-.02em;
@@ -859,7 +859,7 @@ async function createLeague(){
       code, name, commish: phone, createdAt: Date.now(),
       settings: {
         gamesPerWeek: gpw, week: 1, weekOverride: false,
-        pickMode, selectedConference: selectedConference || undefined,
+        pickMode, selectedConference: selectedConference || null, // Firestore rejects `undefined`, unlike plain JS objects
         deadlineMode, pickDeadlineHrs, deadlineDow, deadlineTime
       },
       members: [phone],
@@ -1372,6 +1372,65 @@ function checkScheduledRefresh(){
     }
   });
 }
+
+// Predetermined score simulation. A game can carry a `scoreTimeline` — a fixed schedule of
+// {min, fav, dog, period, status?} checkpoints, where `min` is minutes-since-kickoff. Instead of
+// anyone having to be present to push updates at the right real moment, every open client just
+// computes "what's actually true right now" from real elapsed time and syncs the game to match.
+// Same result no matter who's looking or when — that's what keeps every viewer showing identical
+// scores at identical moments, without any manual pushing.
+function computeTimelineState(g){
+  if(!g.scoreTimeline || !g.scoreTimeline.length) return null;
+  const elapsedMin = (nowMs() - new Date(g.kickoff).getTime()) / 60000;
+  if(elapsedMin < 0) return null; // hasn't kicked off yet
+  let applicable = g.scoreTimeline[0];
+  for(const cp of g.scoreTimeline){
+    if(cp.min <= elapsedMin) applicable = cp; else break;
+  }
+  return applicable;
+}
+function applyScheduledScoring(){
+  if(!DB_READY || !CURRENT_LEAGUE) return;
+  const lg = league();
+  if(!lg) return;
+  const wk = lg.settings.week;
+  const games = lg.games[wk] || [];
+  const updates = [];
+  games.forEach(g=>{
+    if(!g.scoreTimeline || g.status==="final") return;
+    const cp = computeTimelineState(g);
+    if(!cp) return;
+    const newStatus = cp.status || "live";
+    const newPeriod = cp.period || null;
+    if(g.favScore!==cp.fav || g.dogScore!==cp.dog || g.status!==newStatus || g.periodLabel!==newPeriod){
+      updates.push({id:g.id, fav:cp.fav, dog:cp.dog, status:newStatus, period:newPeriod});
+    }
+  });
+  if(!updates.length) return;
+  const justFinalizedIds = updates.filter(u=>u.status==="final").map(u=>u.id);
+  mutate(draft=>{
+    const dl = draft.leagues[CURRENT_LEAGUE];
+    (dl.games[wk]||[]).forEach(g=>{
+      const u = updates.find(x=>x.id===g.id);
+      if(u){ g.favScore=u.fav; g.dogScore=u.dog; g.status=u.status; g.periodLabel=u.period; }
+    });
+  }).then(()=> notifyFinalizedPicks(wk, justFinalizedIds));
+}
+// Builds a standard checkpoint schedule matching: 40 real minutes per quarter, a 20-minute
+// halftime after Q2, and at least one score change every 20 minutes of actual game clock
+// (halftime itself has no plays, so the score right before it just carries through unchanged).
+// scores: array of 9 cumulative [fav,dog] pairs for minutes 20,40,60,80,100,120,140,160,180.
+function buildScoreTimeline(scores){
+  // Index i is the label that applies starting AT mins[i] (e.g. the min:40 checkpoint is already
+  // "2nd Quarter", since Q1 is the 0-40 window and Q2 begins the instant it ends).
+  const periods = ["1st Quarter","2nd Quarter","2nd Quarter","Halftime","3rd Quarter","3rd Quarter","4th Quarter","4th Quarter"];
+  const mins = [20,40,60,80,100,120,140,160,180];
+  const cps = [{min:0, fav:0, dog:0, period:"1st Quarter"}];
+  mins.forEach((min,i)=>{
+    cps.push({min, fav:scores[i][0], dog:scores[i][1], period: min===180 ? null : periods[i], status: min===180 ? "final" : "live"});
+  });
+  return cps;
+}
 // Two reminder types, both foreground-only (see notification settings copy):
 //  - Once per league+week, at Wednesday noon (spreads reveal at Wednesday midnight, so
 //    picks are open by then) — "spreads are live, go make your picks."
@@ -1874,6 +1933,11 @@ function renderPicksTab(){
   games.forEach(g=>{
     const revealed = spreadVisible(g);
     const locked = !revealed || isPickLocked(g, lg);
+    // Deadline modes other than "right at kickoff" can lock picks well before the game actually
+    // starts (e.g. an hour early, or a fixed weekly cutoff) — the "who picked what" reveal should
+    // still wait for the real kickoff, not just the pick deadline, so nobody's strategy leaks
+    // to opponents who haven't locked in yet themselves.
+    const kickedOff = nowMs() >= new Date(g.kickoff).getTime();
     const pick = myPicks[g.id];
     const cover = computeCover(g);
     const favSpreadTxt = revealed ? (g.spread<0?g.spread:"+"+g.spread) : "TBD";
@@ -1913,7 +1977,7 @@ function renderPicksTab(){
       ${!revealed ? `<div class="locked-banner">Spread reveals ${esc(new Date(g.spreadRevealAt).toLocaleString(undefined,{weekday:'short',month:'short',day:'numeric'}))} at 12:00 AM</div>` : ''}
       ${revealed && locked && !cover ? `<div class="locked-banner">${lockPillHtml(g)} · ${pick? "Your pick: "+esc(pick==='fav'?g.fav.n:g.dog.n) : "No pick made"}</div>` : ''}
       ${revealed && !locked ? `<div class="locked-banner">${lockPillHtml(g)}</div>` : ''}
-      ${locked ? `<div class="who-picked-row">
+      ${kickedOff ? `<div class="who-picked-row">
         <div class="who-picked-side"><span class="who-picked-label">${esc(L.team.n)}</span><div class="mini-avatar-row">${avatarsHtml(pickersFor(lg, g, leftKey))}</div></div>
         <div class="who-picked-side"><span class="who-picked-label">${esc(R.team.n)}</span><div class="mini-avatar-row">${avatarsHtml(pickersFor(lg, g, rightKey))}</div></div>
       </div>` : ''}
@@ -2311,16 +2375,11 @@ function renderSettingsModal(){
       <div class="settings-section">
         <h4>Notifications</h4>
         <label class="settings-list-item" style="cursor:pointer">
-          <span>Browser push (this device)</span>
+          <span>Push notifications (this device)</span>
           <input type="checkbox" id="notifPushToggle" ${u.notifPrefs?.push?'checked':''} onchange="toggleBrowserPush(this.checked)">
         </label>
-        <div class="muted" style="margin:0 0 12px">Free, no setup — alerts you right on this device while the app is open, e.g. when one of your picked games goes final. Your browser will ask permission the first time.</div>
-        <label class="settings-list-item" style="cursor:pointer">
-          <span>Email updates</span>
-          <input type="checkbox" id="notifEmailToggle" ${u.notifPrefs?.email?.enabled?'checked':''} onchange="toggleEmailNotif(this.checked)">
-        </label>
-        <div id="notifEmailWrap">${u.notifPrefs?.email?.enabled ? `<div class="field" style="margin:8px 0 4px"><input id="notifEmailAddress" type="email" placeholder="you@email.com" value="${esc(u.notifPrefs.email.address||'')}" onblur="saveNotifEmail()"></div>` : ''}</div>
-        <div class="muted">Saved either way, but actually sending real emails needs a small one-time backend step, similar to the Firebase setup — just ask and I'll wire it up whenever you're ready.</div>
+        <div class="muted" style="margin:0 0 12px">Free, no setup — alerts you right on this device, e.g. when one of your picked games goes final. Works from your home-screen icon too once installed, not just in a browser tab. Your browser will ask permission the first time.</div>
+        <button class="btn btn-outline-accent" onclick="sendTestNotification()">Send Test Notification</button>
       </div>
 
       <div class="settings-section">
@@ -2347,22 +2406,13 @@ async function toggleBrowserPush(checked){
   if(checked) new Notification("The Line", {body:"You're set — we'll notify you here for things like your picked games going final while the app is open."});
   openSettings();
 }
-async function toggleEmailNotif(checked){
-  await mutate(draft=>{
-    const du = draft.users[SESSION_PHONE];
-    du.notifPrefs = du.notifPrefs || {};
-    du.notifPrefs.email = du.notifPrefs.email || {enabled:false, address:""};
-    du.notifPrefs.email.enabled = checked;
-  });
-  openSettings();
-}
-async function saveNotifEmail(){
-  const val = $("notifEmailAddress").value.trim();
-  await mutate(draft=>{
-    const du = draft.users[SESSION_PHONE];
-    du.notifPrefs.email.address = val;
-  });
-  showToast("Email saved.");
+// Fires immediately on tap so you can confirm push actually reaches this device (including a
+// home-screen-installed PWA) without waiting for a real game to go final.
+function sendTestNotification(){
+  if(!("Notification" in window)){ showToast("This browser doesn't support notifications."); return; }
+  if(Notification.permission!=="granted"){ showToast("Turn on push notifications above first."); return; }
+  new Notification("Test notification", {body:"If you're seeing this, push is working on this device."});
+  showToast("Test notification sent.");
 }
 
 /* =========================================================================
@@ -2376,16 +2426,15 @@ function tickCountdowns(){
   if(!$("appScreen").classList.contains("hidden") && (CURRENT_TAB==="picks" || CURRENT_TAB==="board")) render();
 }
 
-// Pull-to-refresh: drag down from the top of any tab to force an immediate score sync. There's
-// no background polling — scores are only fetched on app open or this manual refresh. Uses
-// pointer events so it works for touch and mouse.
-function setupPullToRefresh(){
-  const el = $("tabContent");
+// Pull-to-refresh: drag down from the top of the screen to force an immediate refresh. There's
+// no background polling — data is only fetched on app open or this manual refresh. Uses pointer
+// events so it works for touch and mouse. Wired to every screen (sign in/up, leagues list, and
+// all three in-league tabs), not just the tabs — each one gets its own appropriate refresh action.
+function attachPullToRefresh(el, onRefresh){
+  if(!el) return;
   let startY = null, dragging = false, triggered = false;
   const reset = ()=>{ dragging = false; startY = null; el.style.transform = ""; };
   el.addEventListener("pointerdown", (e)=>{
-    // Works on all three tabs now — Picks and Leaderboard both display data (cover results,
-    // standings) that depends on the same live scores Live tab shows.
     if(el.scrollTop>0) return;
     startY = e.clientY; dragging = true; triggered = false;
   });
@@ -2397,8 +2446,7 @@ function setupPullToRefresh(){
       if(dy>140 && !triggered){
         triggered = true;
         showToast("Refreshing…", 1500);
-        refreshFromServer();
-        syncLiveScores();
+        onRefresh();
       }
     } else {
       reset();
@@ -2408,6 +2456,11 @@ function setupPullToRefresh(){
   el.addEventListener("pointercancel", reset);
   el.addEventListener("pointerleave", reset);
 }
+function setupPullToRefresh(){
+  attachPullToRefresh($("authScreen"), ()=> refreshFromServer());
+  attachPullToRefresh($("leaguesScreen"), ()=> refreshFromServer().then(()=>{ if(!$("leaguesScreen").classList.contains("hidden")) renderLeaguesScreen(); }));
+  attachPullToRefresh($("tabContent"), ()=>{ refreshFromServer(); syncLiveScores(); });
+}
 
 document.addEventListener("DOMContentLoaded", ()=>{
   populateTeamsDatalist();
@@ -2416,6 +2469,7 @@ document.addEventListener("DOMContentLoaded", ()=>{
   setInterval(tickCountdowns, 30000);
   setInterval(checkPickReminders, 30000);
   setInterval(checkScheduledRefresh, 30000);
+  setInterval(applyScheduledScoring, 30000);
 });
 </script>
 </body>
