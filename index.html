@@ -298,6 +298,7 @@
   }
   .pull-spinner.spinning .pull-spinner-ring{animation:pull-spin .7s linear infinite;}
   @keyframes pull-spin{ to{ transform:rotate(360deg); } }
+  .refresh-btn.spinning svg{animation:pull-spin .7s linear infinite;}
 
   /* ---------- settings sheet ---------- */
   .settings-section{margin-bottom:20px;}
@@ -423,8 +424,8 @@
         <span class="nav-label">Picks</span>
       </button>
       <button class="nav-btn" id="navLive" onclick="switchTab('live')">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12h4l2 8 4-16 3 12 2-4h5"/></svg>
-        <span class="nav-label">Live</span>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="12" y1="10" x2="12" y2="20"/></svg>
+        <span class="nav-label">Scores</span>
         <span class="live-dot hidden" id="liveDot"></span>
       </button>
       <button class="nav-btn" id="navBoard" onclick="switchTab('board')">
@@ -1938,7 +1939,10 @@ function renderPicksTab(){
         ${isCurrentWeek ? `<span class="rank-tag" style="background:var(--win);font-size:9.5px;padding:2px 6px">CURRENT</span>` : ''}
         <button class="icon-btn" style="width:30px;height:30px" onclick="setViewingWeek(${viewWeek+1})" ${viewWeek>=lg.settings.week?'disabled':''}>›</button>
       </div>
-      <span class="eyebrow">${games.length} game${games.length===1?"":"s"}</span>
+      <div style="display:flex;align-items:center;gap:10px">
+        <span class="eyebrow">${games.length} game${games.length===1?"":"s"}</span>
+        ${refreshBtnHtml()}
+      </div>
     </div>
     ${!isCurrentWeek ? `<div class="muted" style="margin-bottom:12px">Viewing a past week — picks here are locked in.</div>` : ''}`;
 
@@ -2026,7 +2030,7 @@ function renderLiveTab(){
   // within each group, kickoff order (already applied above) is preserved.
   const statusRank = {live:0, scheduled:1, final:2};
   games = games.slice().sort((a,b)=> statusRank[a.status] - statusRank[b.status]);
-  let html = `<div class="week-header"><h2>Live Scores</h2><span class="eyebrow">Week ${displayWeek}${displayWeek!==lg.settings.week?' · Final':''}</span></div>`;
+  let html = `<div class="week-header"><h2>Scores</h2><div style="display:flex;align-items:center;gap:10px"><span class="eyebrow">Week ${displayWeek}${displayWeek!==lg.settings.week?' · Final':''}</span>${refreshBtnHtml()}</div></div>`;
 
   if(commish){
     html += `<div class="commish-mode-toggle ${editMode?'on':''}" onclick="toggleCommishMode()">
@@ -2122,9 +2126,12 @@ function renderBoardTab(){
       <option value="current" ${viewWeek==null?'selected':''}>Leaderboard</option>
       ${weekOptions.map(w=>`<option value="${w}" ${viewWeek===w?'selected':''}>Week ${w}</option>`).join('')}
     </select>
-    <div class="icon-btn" onclick="openSettings()" style="position:relative">
-      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-      ${isCommish() && (lg.pendingMembers||[]).length ? `<span style="position:absolute;top:-3px;right:-3px;width:9px;height:9px;border-radius:50%;background:var(--loss);border:1.5px solid var(--card-bg,#fff)"></span>` : ''}
+    <div style="display:flex;align-items:center;gap:8px">
+      ${refreshBtnHtml()}
+      <div class="icon-btn" onclick="openSettings()" style="position:relative">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        ${isCommish() && (lg.pendingMembers||[]).length ? `<span style="position:absolute;top:-3px;right:-3px;width:9px;height:9px;border-radius:50%;background:var(--loss);border:1.5px solid var(--card-bg,#fff)"></span>` : ''}
+      </div>
     </div>
   </div>
   <div class="muted" style="margin-bottom:14px">${viewWeek==null ? 'Season standings through today.' : `Standings through the end of Week ${viewWeek}.`}</div>`;
@@ -2446,6 +2453,22 @@ function tickCountdowns(){
 // no background polling — data is only fetched on app open or this manual refresh. Uses pointer
 // events so it works for touch and mouse. Wired to every screen (sign in/up, leagues list, and
 // all three in-league tabs), not just the tabs — each one gets its own appropriate refresh action.
+// Explicit refresh button for the header row — same underlying action as pull-to-refresh, just
+// a visible, discoverable alternative for anyone who doesn't know about (or can't easily do) the
+// drag gesture. The button's own icon spins while the refresh is actually in flight.
+async function manualRefresh(btn){
+  if(btn) btn.classList.add("spinning");
+  try{
+    await Promise.all([refreshFromServer(), syncLiveScores()]);
+  } finally {
+    if(btn) btn.classList.remove("spinning");
+  }
+}
+function refreshBtnHtml(){
+  return `<button class="icon-btn refresh-btn" onclick="manualRefresh(this)" title="Refresh" style="width:30px;height:30px;color:var(--ink-faint)">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.34-5.66"/><polyline points="20 4 20 9 15 9"/></svg>
+  </button>`;
+}
 function attachPullToRefresh(el, onRefresh){
   if(!el) return;
   const spinner = $("pullSpinner");
