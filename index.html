@@ -272,6 +272,18 @@
   .nav-btn.active{color:var(--accent);background:var(--accent-dim);}
   .nav-btn .live-dot{position:absolute;top:2px;right:26%;width:8px;height:8px;background:var(--loss);border-radius:99px;box-shadow:0 0 0 2px var(--navy-900);animation:pulse-dot 1.2s infinite;}
 
+  /* ---------- global busy indicator ---------- */
+  .loading-bar{position:fixed;top:0;left:0;width:100%;height:3px;z-index:200;overflow:hidden;background:transparent;}
+  .loading-bar::after{
+    content:"";position:absolute;top:0;left:-30%;width:30%;height:100%;
+    background:linear-gradient(90deg,transparent,var(--accent-2),var(--accent),transparent);
+    animation:loading-sweep 1s ease-in-out infinite;
+  }
+  @keyframes loading-sweep{
+    0%{left:-30%;}
+    100%{left:100%;}
+  }
+
   /* ---------- settings sheet ---------- */
   .settings-section{margin-bottom:20px;}
   .settings-section h4{font-size:11.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:10px;}
@@ -290,6 +302,8 @@
 </head>
 <body>
 <div class="shell" id="shell">
+
+  <div id="globalLoadingBar" class="loading-bar hidden"></div>
 
   <!-- ============ AUTH ============ -->
   <div id="authScreen">
@@ -332,7 +346,7 @@
           <input type="checkbox" id="siRemember" checked style="width:16px;height:16px;accent-color:var(--accent)">Remember me on this device
         </label>
         <div class="error-msg" id="siError"></div>
-        <button class="btn btn-primary" onclick="doSignIn()">Sign In</button>
+        <button class="btn btn-primary" id="siSubmitBtn" onclick="doSignIn()">Sign In</button>
       </div>
 
       <div id="signUpForm" class="hidden">
@@ -351,7 +365,7 @@
           <input type="checkbox" id="suRemember" checked style="width:16px;height:16px;accent-color:var(--accent)">Remember me on this device
         </label>
         <div class="error-msg" id="suError"></div>
-        <button class="btn btn-primary" onclick="doSignUp()">Create Account</button>
+        <button class="btn btn-primary" id="suSubmitBtn" onclick="doSignUp()">Create Account</button>
       </div>
     </div>
   </div>
@@ -462,19 +476,35 @@ async function refreshFromServer(){
   }
 }
 
+// Every button that saves something (create league, join, pick, pause, etc.) routes through
+// here, so a single busy-counter gives the whole app consistent "this is working" feedback
+// (a thin bar at the very top of the screen) instead of every button needing its own handling —
+// crucial on real mobile connections where a write can visibly take a second or more.
+let MUTATE_IN_FLIGHT_COUNT = 0;
+function setGlobalBusy(on){
+  MUTATE_IN_FLIGHT_COUNT += on ? 1 : -1;
+  const bar = $("globalLoadingBar");
+  if(bar) bar.classList.toggle("hidden", MUTATE_IN_FLIGHT_COUNT<=0);
+}
+
 // Safe read-modify-write. mutator receives a deep-cloned draft of DB and mutates it in place.
 // Applies the same write locally right after it lands on the server, so the acting user always
 // sees their own action immediately without waiting on any listener or refresh trigger.
 async function mutate(mutator){
   if(!docRef) return;
-  await fbDb.runTransaction(async (tx)=>{
-    const snap = await tx.get(docRef);
-    const draft = snap.exists ? snap.data() : { users:{}, leagues:{} };
-    draft.users = draft.users || {};
-    draft.leagues = draft.leagues || {};
-    mutator(draft);
-    tx.set(docRef, draft);
-  });
+  setGlobalBusy(true);
+  try{
+    await fbDb.runTransaction(async (tx)=>{
+      const snap = await tx.get(docRef);
+      const draft = snap.exists ? snap.data() : { users:{}, leagues:{} };
+      draft.users = draft.users || {};
+      draft.leagues = draft.leagues || {};
+      mutator(draft);
+      tx.set(docRef, draft);
+    });
+  } finally {
+    setGlobalBusy(false);
+  }
 }
 
 /* =========================================================================
@@ -740,13 +770,21 @@ async function doSignUp(){
   const team = findTeam(teamName);
   const passwordHash = await sha256(pass + ":" + phone);
 
-  await mutate(draft=>{
-    draft.users[phone] = {
-      phone, name, passwordHash,
-      favTeam: team ? {n:team.n, l:team.l, c:team.c} : {n:teamName, l:null, c:null},
-      leagues: []
-    };
-  });
+  const btn = $("suSubmitBtn");
+  btn.disabled = true; btn.textContent = "Creating account…";
+  try{
+    await mutate(draft=>{
+      draft.users[phone] = {
+        phone, name, passwordHash,
+        favTeam: team ? {n:team.n, l:team.l, c:team.c} : {n:teamName, l:null, c:null},
+        leagues: []
+      };
+    });
+  } catch(err){
+    console.error(err);
+    btn.disabled = false; btn.textContent = "Create Account";
+    return errEl.textContent = "Couldn't reach the server — check your connection and try again.";
+  }
   SESSION_PHONE = phone;
   SESSION_STORE = $("suRemember") && !$("suRemember").checked ? sessionStorage : localStorage;
   (SESSION_STORE===localStorage?sessionStorage:localStorage).removeItem("pickem_session");
