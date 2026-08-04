@@ -199,6 +199,12 @@
   .mini-avatar{width:19px;height:19px;border-radius:99px;background:var(--accent-dim);color:var(--accent-2);font-size:8px;font-weight:900;display:flex;align-items:center;justify-content:center;border:1px solid var(--accent);flex-shrink:0;}
   .recap-none{font-size:9px;color:var(--ink-faint);}
   .recap-push-tag{text-align:center;font-size:11px;font-weight:800;color:var(--push);letter-spacing:.03em;margin-top:10px;}
+  .superlatives-row{display:flex;flex-direction:column;gap:8px;margin-bottom:16px;}
+  .superlative-card{display:flex;align-items:center;gap:12px;background:linear-gradient(135deg,rgba(234,179,8,.12),rgba(87,199,255,.08));border:1px solid var(--gold);border-radius:12px;padding:10px 14px;}
+  .superlative-emoji{font-size:26px;flex-shrink:0;}
+  .superlative-title{font-size:10.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--gold);}
+  .superlative-winner{font-size:15px;font-weight:900;}
+  .superlative-sub{font-size:11.5px;color:var(--ink-dim);}
   .team-spread{font-size:11.5px;color:var(--ink-dim);font-weight:700;}
   .vs-col{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:0 4px;min-width:46px;}
   .vs-txt{font-size:10.5px;color:var(--ink-faint);font-weight:800;}
@@ -365,6 +371,7 @@
         </label>
         <div class="error-msg" id="siError"></div>
         <button class="btn btn-primary" id="siSubmitBtn" onclick="doSignIn()">Sign In</button>
+        <div style="text-align:center;margin-top:12px"><button class="link-btn" onclick="openForgotPassword()">Forgot password?</button></div>
       </div>
 
       <div id="signUpForm" class="hidden">
@@ -1546,6 +1553,72 @@ async function syncLiveScores(){
   }
 }
 
+// Maps a real baseball inning onto the football-style quarter labels the rest of the app already
+// understands, per an explicit ask: 1-2 -> Q1, 3-4 -> Q2, 5 -> Halftime, 6-7 -> Q3, 8+ -> Q4.
+function inningToQuarterLabel(inning){
+  if(inning<=2) return "1st Quarter";
+  if(inning<=4) return "2nd Quarter";
+  if(inning===5) return "Halftime";
+  if(inning<=7) return "3rd Quarter";
+  return "4th Quarter";
+}
+// Generic real-data scraper for a single test game: any game carrying a `liveDataSource` field
+// ({sport, league, teamName}) gets its score pulled from a completely different real ESPN
+// scoreboard (e.g. MLB) instead of the predetermined scoreTimeline or the CFB feed — a way to
+// see how the live-score plumbing handles genuinely real, unpredictable data. `liveDataProxySide`
+// picks whether the scraped team's score stands in for our "fav" or "dog" side.
+let EXTERNAL_SYNC_IN_FLIGHT = false;
+async function syncExternalDataSources(){
+  if(EXTERNAL_SYNC_IN_FLIGHT || !CURRENT_LEAGUE || !DB_READY) return;
+  const lg = league();
+  if(!lg) return;
+  const wk = lg.settings.week;
+  const targets = (lg.games[wk]||[]).filter(g=> g.liveDataSource && g.status!=="final");
+  if(!targets.length) return;
+  EXTERNAL_SYNC_IN_FLIGHT = true;
+  try{
+    for(const g of targets){
+      const src = g.liveDataSource;
+      try{
+        const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/${src.sport}/${src.league}/scoreboard`);
+        if(!res.ok) continue;
+        const data = await res.json();
+        const matchesTeam = c => c.team.displayName===src.teamName || c.team.shortDisplayName===src.teamName || c.team.name===src.teamName;
+        const ev = (data.events||[]).find(e=> e.competitions?.[0]?.competitors?.some(matchesTeam));
+        if(!ev) continue;
+        const comp = ev.competitions[0];
+        const home = comp.competitors.find(c=>c.homeAway==="home");
+        const away = comp.competitors.find(c=>c.homeAway==="away");
+        if(!home || !away) continue;
+        const sourceIsHome = matchesTeam(home);
+        const sourceC = sourceIsHome ? home : away;
+        const otherC = sourceIsHome ? away : home;
+        const sourceScore = parseInt(sourceC.score,10);
+        const otherScore = parseInt(otherC.score,10);
+        const state = comp.status?.type?.state;
+        const newStatus = state==="in" ? "live" : (state==="post" ? "final" : "scheduled");
+        const inning = comp.status?.period || null;
+        const periodLabel = newStatus==="live" && inning ? inningToQuarterLabel(inning) : (newStatus==="final" ? null : null);
+        const proxySide = g.liveDataProxySide || "fav";
+        const favScore = proxySide==="fav" ? sourceScore : otherScore;
+        const dogScore = proxySide==="dog" ? sourceScore : otherScore;
+        if(g.favScore!==favScore || g.dogScore!==dogScore || g.status!==newStatus || g.periodLabel!==periodLabel){
+          await mutate(draft=>{
+            const dg = (draft.leagues[CURRENT_LEAGUE].games[wk]||[]).find(x=>x.id===g.id);
+            if(!dg) return;
+            dg.favScore = isNaN(favScore) ? dg.favScore : favScore;
+            dg.dogScore = isNaN(dogScore) ? dg.dogScore : dogScore;
+            dg.status = newStatus;
+            dg.periodLabel = periodLabel;
+          });
+        }
+      }catch(err){ console.error("external data scrape failed for", g.id, err); }
+    }
+  } finally {
+    EXTERNAL_SYNC_IN_FLIGHT = false;
+  }
+}
+
 function confirmClearPause(phone, name){
   const root = $("modalRoot");
   root.innerHTML = `<div class="modal-backdrop center" onclick="if(event.target===this)closeModal()">
@@ -1587,6 +1660,42 @@ async function submitResetPassword(phone){
   });
   showToast(`Password reset for ${DB.users[phone]?.name||'member'} — tell them it's: ${val}`, 4500);
   openSettings();
+}
+// Self-service recovery so people don't have to bug the commissioner for every forgotten
+// password — typing your own name back is obviously not real security (anyone who knows your
+// name and phone could reset it), but that matches how casually-secured this whole app already
+// is for a private friend group, and it's a lot more convenient than a commissioner bottleneck.
+function openForgotPassword(){
+  const root = $("modalRoot");
+  root.innerHTML = `<div class="modal-backdrop center" onclick="if(event.target===this)closeModal()">
+    <div class="modal-sheet">
+      <div class="modal-title">Reset your password</div>
+      <div class="muted" style="margin-bottom:16px">Enter the phone number and name your account was created with, and pick a new password.</div>
+      <div class="field" style="margin-bottom:14px"><label>Phone Number</label><input id="fpPhone" type="tel" placeholder="(555) 555-0100" inputmode="numeric" oninput="onPhoneInput(this)"></div>
+      <div class="field" style="margin-bottom:14px"><label>Your Name</label><input id="fpName" type="text" placeholder="Full name as you signed up"></div>
+      <div class="field" style="margin-bottom:4px"><label>New Password</label><input id="fpNewPass" type="text" placeholder="At least 4 characters" autocomplete="off"></div>
+      <div class="error-msg" id="fpError"></div>
+      <div style="display:flex;gap:10px">
+        <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="submitForgotPassword()">Reset Password</button>
+      </div>
+    </div>
+  </div>`;
+}
+async function submitForgotPassword(){
+  const phone = normPhone($("fpPhone").value);
+  const name = $("fpName").value.trim();
+  const val = $("fpNewPass").value;
+  const err = $("fpError");
+  err.textContent = "";
+  const u = DB.users[phone];
+  if(!u) return err.textContent = "No account found with that phone number.";
+  if(u.name.trim().toLowerCase() !== name.toLowerCase()) return err.textContent = "That name doesn't match our records for this phone number.";
+  if(!val || val.length<4) return err.textContent = "Password must be at least 4 characters.";
+  const passwordHash = await sha256(val + ":" + phone);
+  await mutate(draft=>{ draft.users[phone].passwordHash = passwordHash; });
+  closeModal();
+  showToast("Password reset — sign in with your new password.");
 }
 function confirmDeleteGame(gameId, matchupLabel){
   const root = $("modalRoot");
@@ -1747,6 +1856,7 @@ function openWeeklyRecap(week){
         <button class="icon-btn" style="width:30px;height:30px" onclick="openWeeklyRecap(${nextWeek})" ${nextWeek==null?'disabled':''}>›</button>
       </div>
       <div class="muted" style="margin-bottom:16px">Every game, chronologically, and who covered.</div>
+      ${superlativesHtml(lg, week)}
       ${games.map(g=>recapGameHtml(lg,g)).join('') || `<div class="empty-hint">No games this week.</div>`}
       <button class="btn btn-primary" style="margin-top:4px" onclick="closeModal()">Done</button>
     </div></div>`;
@@ -1804,6 +1914,67 @@ function computeStandings(lg, uptoWeek){
   });
   rows.sort((a,b)=> b.pct-a.pct || b.wins-a.wins || a.losses-b.losses || a.name.localeCompare(b.name));
   return rows;
+}
+
+// Crude, just-for-fun awards for a single week (or a whole season if uptoWeek is left off) —
+// purely cosmetic, doesn't touch standings math at all. "Got That Dawg In Him" is just best
+// record; "Biggest Nut Sack" is whoever correctly rode the largest underdog spread that covered.
+// week: a specific week number for that single week's awards, or null for season-wide (every
+// completed week combined) — these are two different asks (recap wants just that week; a
+// season summary wants everything), so this covers both off the same function.
+function computeSuperlatives(lg, week){
+  const weeks = Object.keys(lg.games).map(w=>parseInt(w,10)).filter(w=> week==null || w===week);
+  const finalGames = [];
+  weeks.forEach(wk=> (lg.games[wk]||[]).forEach(g=>{ if(g.status==="final") finalGames.push(g); }));
+  if(!finalGames.length) return null;
+
+  const records = lg.members.map(phone=>{
+    let wins=0, losses=0;
+    finalGames.forEach(g=>{
+      const cover = computeCover(g);
+      if(!cover || cover==="push") return;
+      if(isPausedForGame(lg, phone, g)){ losses++; return; }
+      const pick = (lg.picks[phone]||{})[g.id];
+      if(!pick) return;
+      if(pick===cover) wins++; else losses++;
+    });
+    return { phone, name: DB.users[phone]?.name||"Unknown", wins, losses };
+  }).filter(r=> r.wins+r.losses>0);
+  if(!records.length) return null;
+
+  const dawgSorted = records.slice().sort((a,b)=> b.wins-a.wins || a.losses-b.losses || a.name.localeCompare(b.name));
+  const dawg = dawgSorted[0];
+
+  let boldest = null;
+  finalGames.forEach(g=>{
+    if(computeCover(g)!=="dog") return; // only dog covers count as "bold" — the underdog actually hit
+    const spreadMag = Math.abs(g.spread);
+    lg.members.forEach(phone=>{
+      if((lg.picks[phone]||{})[g.id]!=="dog") return;
+      if(!boldest || spreadMag>boldest.spreadMag){
+        boldest = { phone, name: DB.users[phone]?.name||"Unknown", spreadMag, fav:g.fav.n, dog:g.dog.n };
+      }
+    });
+  });
+
+  return { dawg, boldest };
+}
+// Off for now by request (cruder placeholder awards — better ones coming later), but the
+// underlying computeSuperlatives() logic stays intact so this is a one-line flip to bring back.
+const SUPERLATIVES_ENABLED = false;
+function superlativesHtml(lg, uptoWeek){
+  if(!SUPERLATIVES_ENABLED) return "";
+  const s = computeSuperlatives(lg, uptoWeek);
+  if(!s) return "";
+  const cards = [];
+  if(s.dawg && s.dawg.wins>0){
+    cards.push(`<div class="superlative-card"><div class="superlative-emoji">🐕</div><div><div class="superlative-title">Got That Dawg In Him</div><div class="superlative-winner">${esc(s.dawg.name)}</div><div class="superlative-sub">${s.dawg.wins}-${s.dawg.losses}</div></div></div>`);
+  }
+  if(s.boldest){
+    cards.push(`<div class="superlative-card"><div class="superlative-emoji">🥜</div><div><div class="superlative-title">Biggest Nut Sack</div><div class="superlative-winner">${esc(s.boldest.name)}</div><div class="superlative-sub">Rode ${esc(s.boldest.dog)} +${s.boldest.spreadMag} over ${esc(s.boldest.fav)}</div></div></div>`);
+  }
+  if(!cards.length) return "";
+  return `<div class="superlatives-row">${cards.join('')}</div>`;
 }
 
 /* =========================================================================
@@ -2118,9 +2289,9 @@ function renderLiveTab(){
         <span class="status-chip ${g.status}">${g.status}${g.status==='live' && g.periodLabel ? ` · ${esc(g.periodLabel)}` : ''}</span>
       </div>
       <div class="matchup">
-        <div class="team-side">${teamBadgeHtml(L.team,48)}<div class="team-name${myPick===leftKey?' my-pick':''}">${esc(L.team.n)}${rankTag(L.rank)}${L.home?' <span class="home-tag">HOME</span>':''}</div><div class="team-spread">${L.spreadTxt}</div></div>
+        <div class="team-side">${teamBadgeHtml(L.team,48)}<div class="team-name${myPick===leftKey?' my-pick':''}">${esc(L.team.n)}${rankTag(L.rank)}</div><div class="team-spread">${L.spreadTxt}</div></div>
         <div class="vs-col"><span class="vs-txt">SCORE</span><span class="score-txt">${L.score??"–"}-${R.score??"–"}</span></div>
-        <div class="team-side">${teamBadgeHtml(R.team,48)}<div class="team-name${myPick===rightKey?' my-pick':''}">${esc(R.team.n)}${rankTag(R.rank)}${R.home?' <span class="home-tag">HOME</span>':''}</div><div class="team-spread">${R.spreadTxt}</div></div>
+        <div class="team-side">${teamBadgeHtml(R.team,48)}<div class="team-name${myPick===rightKey?' my-pick':''}">${esc(R.team.n)}${rankTag(R.rank)}</div><div class="team-spread">${R.spreadTxt}</div></div>
       </div>
       ${!revealed ? `<div class="locked-banner">Spread reveals ${esc(new Date(g.spreadRevealAt).toLocaleString(undefined,{weekday:'short',month:'short',day:'numeric'}))} at 12:00 AM</div>` : ''}
       ${cover ? `<div class="cover-banner ${cover==='push'?'push':''}" style="color:${cover==='push'?'':'var(--ink-dim)'}">${cover==='push' ? 'Push' : (cover==='fav'?esc(g.fav.n):esc(g.dog.n))+' covered'}</div>` : ''}
@@ -2165,7 +2336,8 @@ function renderBoardTab(){
       </div>
     </div>
   </div>
-  <div class="muted" style="margin-bottom:14px">${viewWeek==null ? 'Season standings through today.' : `Standings through the end of Week ${viewWeek}.`}</div>`;
+  <div class="muted" style="margin-bottom:14px">${viewWeek==null ? 'Season standings through today.' : `Standings through the end of Week ${viewWeek}.`}</div>
+  ${viewWeek==null ? superlativesHtml(lg, null) : ''}`;
 
   if(rows.length===0){
     html += `<div class="empty-hint">No standings yet.</div>`;
@@ -2491,7 +2663,7 @@ function tickCountdowns(){
 async function manualRefresh(btn){
   if(btn) btn.classList.add("spinning");
   try{
-    await Promise.all([refreshFromServer(), syncLiveScores()]);
+    await Promise.all([refreshFromServer(), syncLiveScores(), syncExternalDataSources()]);
   } finally {
     if(btn) btn.classList.remove("spinning");
   }
@@ -2538,7 +2710,7 @@ function attachPullToRefresh(el, onRefresh){
 function setupPullToRefresh(){
   attachPullToRefresh($("authScreen"), ()=> refreshFromServer());
   attachPullToRefresh($("leaguesScreen"), ()=> refreshFromServer().then(()=>{ if(!$("leaguesScreen").classList.contains("hidden")) renderLeaguesScreen(); }));
-  attachPullToRefresh($("tabContent"), ()=> Promise.all([refreshFromServer(), syncLiveScores()]));
+  attachPullToRefresh($("tabContent"), ()=> Promise.all([refreshFromServer(), syncLiveScores(), syncExternalDataSources()]));
 }
 
 document.addEventListener("DOMContentLoaded", ()=>{
@@ -2549,6 +2721,7 @@ document.addEventListener("DOMContentLoaded", ()=>{
   setInterval(checkPickReminders, 30000);
   setInterval(checkScheduledRefresh, 30000);
   setInterval(applyScheduledScoring, 30000);
+  setInterval(syncExternalDataSources, 30000);
 });
 </script>
 </body>
