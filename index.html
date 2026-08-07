@@ -169,6 +169,7 @@
   .cm-switch.on .cm-knob{transform:translateX(17px);background:var(--gold);}
   .ticket-top{padding:13px 16px 8px;display:flex;align-items:center;justify-content:space-between;}
   .kickoff-txt{font-size:11.5px;color:var(--ink-faint);font-weight:700;letter-spacing:.02em;}
+  .line-txt{font-size:11px;color:var(--ink-dim);font-weight:800;letter-spacing:.02em;font-variant-numeric:tabular-nums;}
   .status-chip{font-size:10px;font-weight:900;letter-spacing:.06em;text-transform:uppercase;padding:3px 8px;border-radius:999px;}
   .status-chip.scheduled{background:var(--navy-700);color:var(--ink-dim);}
   .status-chip.live{background:rgba(251,113,133,.15);color:var(--loss);}
@@ -545,6 +546,14 @@ const TEAMS = [{"n":"Air Force","l":"https://a.espncdn.com/i/teamlogos/ncaa/500/
 const TEAM_BY_NAME = {};
 TEAMS.forEach(t=> TEAM_BY_NAME[t.n.toLowerCase()] = t);
 
+// Real ESPN broadcast abbreviations, keyed by curated team name — used for the compact
+// "*HOME -7.5" line-of-the-day notation on the Scores tab.
+const TEAM_ABBR = {"TCU":"TCU","North Carolina":"UNC","USC":"USC","San Jose State":"SJSU","Virginia":"UVA","NC State":"NCSU","Jacksonville State":"JVST","Eastern Michigan":"EMU","Stanford":"STAN","Hawai'i":"HAW","Florida State":"FSU","New Mexico State":"NMSU","UNLV":"UNLV","Memphis":"MEM","Rutgers":"RUTG","UCF":"UCF","Wake Forest":"WAKE","Akron":"AKR","Delaware":"DEL","Kennesaw State":"KENN","Buffalo":"BUFF","Missouri":"MIZ","Georgia Tech":"GT","Colorado":"COLO","Minnesota":"MINN","Utah":"UTAH","Illinois":"ILL","UAB":"UAB","Purdue":"PUR","Georgia State":"GAST","Oklahoma":"OU","UTEP":"UTEP","Kansas":"KU","Michigan State":"MSU","Toledo":"TOL","Miami":"MIA","Fresno State":"FRES","Alabama":"ALA","East Carolina":"ECU","Houston":"HOU","Oregon State":"ORST","West Virginia":"WVU","Coastal Carolina":"CCU","Syracuse":"SYR","Indiana":"IU","North Texas":"UNT","Nebraska":"NEB","Ohio":"OHIO","UConn":"CONN","Bowling Green":"BGSU","James Madison":"JMU","Liberty":"LIB","Pittsburgh":"PITT","Miami (OH)":"M-OH","Ohio State":"OSU","Ball State":"BALL","South Carolina":"SC","Kent State":"KENT","Kentucky":"UK","Iowa State":"ISU","Missouri State":"MOST","Air Force":"AFA","Temple":"TEM","Georgia":"UGA","Auburn":"AUB","Baylor":"BAY","Tennessee":"TENN","Texas":"TEX","Texas State":"TXST","Cincinnati":"CIN","Boston College":"BC","Duke":"DUKE","Tulane":"TULN","Oregon":"ORE","Boise State":"BOIS","Penn State":"PSU","Marshall":"MRSH","Charlotte":"CLT","Navy":"NAVY","UTSA":"UTSA","Tulsa":"TLSA","Oklahoma State":"OKST","Arkansas":"ARK","Iowa":"IOWA","Northern Illinois":"NIU","Southern Miss":"USM","Colorado State":"CSU","Wyoming":"WYO","Old Dominion":"ODU","Texas A&M":"TA&M","Vanderbilt":"VAN","Texas Tech":"TTU","Kansas State":"KSU","Utah State":"USU","Arkansas State":"ARST","Rice":"RICE","South Florida":"USF","Florida":"FLA","Middle Tennessee":"MTSU","Georgia Southern":"GASO","South Alabama":"USA","Louisiana":"UL","Troy":"TROY","Sam Houston":"SHSU","LSU":"LSU","Clemson":"CLEM","Mississippi State":"MSST","Virginia Tech":"VT","Michigan":"MICH","Western Michigan":"WMU","Louisiana Tech":"LT","Florida Atlantic":"FAU","BYU":"BYU","Maryland":"MD","Northwestern":"NU","Arizona State":"ASU","Arizona":"ARIZ","San Diego State":"SDSU","New Mexico":"UNM","Central Michigan":"CMU","California":"CAL","UCLA":"UCLA","Nevada":"NEV","Western Kentucky":"WKU","Washington":"WASH","Washington State":"WSU","Ole Miss":"MISS","Louisville":"LOU","Notre Dame":"ND","Wisconsin":"WIS","SMU":"SMU","Appalachian State":"APP","FIU":"FIU","Louisiana-Monroe":"ULM","UMass":"MASS"};
+function teamAbbr(team){
+  if(!team) return "?";
+  return TEAM_ABBR[team.n] || team.n.slice(0,4).toUpperCase();
+}
+
 function findTeam(name){
   if(!name) return null;
   return TEAM_BY_NAME[name.trim().toLowerCase()] || null;
@@ -573,7 +582,13 @@ function stripDiacritics(s){ return s.normalize("NFD").replace(/[̀-ͯ]/g,""); }
 // Requires whole-word boundaries (space or string edge) on both sides of the match, so a
 // different school that merely starts with the same word (e.g. "Arkansas-Pine Bluff" vs
 // our curated "Arkansas") is correctly rejected instead of misattributed.
-const TEAM_NAME_QUALIFIERS = ["western","eastern","northern","southern","north","south","east","west","central"];
+const TEAM_NAME_QUALIFIERS = ["western","eastern","northern","southern","north","south","east","west","central","northeast","northeastern","southeast","southeastern","northwest","northwestern","southwest","southwestern"];
+// Suffix modifiers that turn a curated name into a different school entirely (e.g. curated
+// "North Carolina" must not match "North Carolina A&T", curated "Florida" must not match
+// "Florida International" or "Florida A&M") — "state" was the original case; these are the
+// same shape of bug for other real-world FCS "buy game" opponents that share a curated name's
+// first word(s) but aren't themselves curated (since they're not FBS).
+const TEAM_NAME_SUFFIX_REJECT = ["state","a&t","a&m","international"];
 function matchLiveTeam(espnDisplayName){
   if(!espnDisplayName) return null;
   const lower = stripDiacritics(espnDisplayName.toLowerCase());
@@ -592,9 +607,11 @@ function matchLiveTeam(espnDisplayName){
       const prevWord = lower.slice(0, idx).trimEnd().split(/\s+/).pop();
       if(TEAM_NAME_QUALIFIERS.includes(prevWord) && !needle.startsWith(prevWord+" ")) continue;
     }
-    // Reject curated "Illinois" matching "Illinois State ..." (a different school) unless the
-    // curated entry itself is the "State" school (like "Ohio State").
-    if(!needle.endsWith("state") && lower.slice(afterIdx).trimStart().startsWith("state ")) continue;
+    // Reject curated "North Carolina" matching "North Carolina A&T ..." (a different school),
+    // curated "Illinois" matching "Illinois State ..." etc — unless the curated entry itself IS
+    // that longer school (like "Ohio State" or "Texas A&M"), which self-matches fine.
+    const afterWord = lower.slice(afterIdx).trimStart().split(/\s+/)[0];
+    if(TEAM_NAME_SUFFIX_REJECT.includes(afterWord) && !needle.endsWith(afterWord)) continue;
     if(!best || t.n.length > best.n.length) best = t;
   }
   return best;
@@ -1145,6 +1162,25 @@ function rankPrefWeightFn(pref){
 // live, final, or already picked is left alone — re-rolling never invalidates a real pick.
 // Builds a normalized game candidate from one ESPN event, or null if the event is unusable.
 // Shared by the full-week generator and the single-team lookup used when a new member joins.
+// The scoreboard's own embedded curatedRank field only fills in once games are close (games
+// weeks out come back unranked even for a top-5 team), but ESPN publishes the actual poll
+// separately well before that — cached here and used as the fallback rank source.
+let RANK_BY_TEAM = null;
+async function ensureRankings(){
+  if(RANK_BY_TEAM) return RANK_BY_TEAM;
+  RANK_BY_TEAM = {};
+  try{
+    const res = await fetch("https://site.api.espn.com/apis/site/v2/sports/football/college-football/rankings");
+    const data = await res.json();
+    const poll = data.rankings && data.rankings.find(p=> /playoff|ap top|coaches/i.test(p.name||"")) || (data.rankings && data.rankings[0]);
+    (poll && poll.ranks || []).forEach(r=>{
+      const t = findTeam(r.team.location) || matchLiveTeam(`${r.team.location} ${r.team.name}`);
+      if(t && !(t.n in RANK_BY_TEAM)) RANK_BY_TEAM[t.n] = r.current;
+    });
+  }catch(err){ console.error("rankings fetch failed", err); }
+  return RANK_BY_TEAM;
+}
+
 function buildCandidateFromEvent(ev){
   const comp = ev.competitions && ev.competitions[0];
   const home = comp && comp.competitors.find(c=>c.homeAway==="home");
@@ -1160,10 +1196,9 @@ function buildCandidateFromEvent(ev){
   const favEntry = favTeam ? {n:favTeam.n,l:favTeam.l,c:favTeam.c} : {n:favC.team.displayName,l:(favC.team.logo||null),c:null};
   const dogEntry = dogTeam ? {n:dogTeam.n,l:dogTeam.l,c:dogTeam.c} : {n:dogC.team.displayName,l:(dogC.team.logo||null),c:null};
   const kickoff = new Date(comp.date).toISOString();
-  const homeRank = (home.curatedRank && home.curatedRank.current) || 99;
-  const awayRank = (away.curatedRank && away.curatedRank.current) || 99;
-  const favRank = homeIsFav ? homeRank : awayRank;
-  const dogRank = homeIsFav ? awayRank : homeRank;
+  const rankByTeam = RANK_BY_TEAM || {};
+  const favRank = (favC.curatedRank && favC.curatedRank.current) || (favTeam && rankByTeam[favTeam.n]) || 99;
+  const dogRank = (dogC.curatedRank && dogC.curatedRank.current) || (dogTeam && rankByTeam[dogTeam.n]) || 99;
   // No real line posted yet (common for games more than a week or two out) — make one up rather
   // than leaving picks stuck on "TBD". Skews toward small-to-medium spreads, since blowout lines
   // are rarer than close ones; a real line just overwrites this the next time games are topped up.
@@ -1178,6 +1213,40 @@ function buildCandidateFromEvent(ev){
   };
 }
 
+// NFL counterpart to buildCandidateFromEvent — no curated logo/color data or conference/rank
+// concepts, just the real matchup, real line (when posted), and real kickoff.
+function buildNflCandidateFromEvent(ev){
+  const comp = ev.competitions && ev.competitions[0];
+  const home = comp && comp.competitors.find(c=>c.homeAway==="home");
+  const away = comp && comp.competitors.find(c=>c.homeAway==="away");
+  if(!comp || !home || !away) return null;
+  const odds = comp.odds && comp.odds[0];
+  const hasOdds = !!(odds && typeof odds.spread === "number");
+  const homeIsFav = hasOdds ? !!(odds.homeTeamOdds && odds.homeTeamOdds.favorite) : true;
+  const favC = homeIsFav ? home : away;
+  const dogC = homeIsFav ? away : home;
+  const favEntry = {n:favC.team.displayName, l:null, c:null};
+  const dogEntry = {n:dogC.team.displayName, l:null, c:null};
+  const kickoff = new Date(comp.date).toISOString();
+  return {
+    key: favEntry.n+"@"+dogEntry.n, fav:favEntry, dog:dogEntry,
+    spread: hasOdds ? -Math.abs(odds.spread) : null,
+    kickoff, spreadRevealAt: computeSpreadRevealTime(kickoff),
+    espnId: ev.id, favIsHome: homeIsFav,
+    rankHit: false, favRank: null, dogRank: null, conf: "NFL"
+  };
+}
+
+// A member's favorite team for a given league — NFL leagues keep their own per-league favorite
+// (sign-up only collects a CFB team), while CFB leagues use the team chosen at sign-up.
+function favTeamNameFor(lg, phone){
+  if((lg.settings.sport||"cfb")==="nfl"){
+    return (lg.favTeams && lg.favTeams[phone] && lg.favTeams[phone].n) || null;
+  }
+  const u = DB.users[phone];
+  return (u && u.favTeam && u.favTeam.n) || null;
+}
+
 // When a new member joins a league running Favorite Teams mode, quietly check whether their
 // team is already playing this week and, if there's room, add just that one game — no full
 // regenerate, no reshuffling anything else. If their team isn't found playing, games are left
@@ -1187,18 +1256,23 @@ async function maybeAddNewMemberFavoriteGame(code, phone){
   if(!lg || (lg.settings.pickMode||"manual")!=="favorites") return;
   const wk = lg.settings.week;
   const existing = lg.games[wk] || [];
-  const teamName = DB.users[phone] && DB.users[phone].favTeam && DB.users[phone].favTeam.n;
+  const teamName = favTeamNameFor(lg, phone);
   if(!teamName) return;
   if(existing.some(g=> g.fav.n===teamName || g.dog.n===teamName)) return; // already in the slate
   if(existing.length >= lg.settings.gamesPerWeek) return; // no room — keep games the same
 
   try{
-    const year = seasonYear();
-    const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard?groups=80&year=${year}&seasontype=2&week=${wk}&limit=200`);
+    const sport = lg.settings.sport || "cfb";
+    if(sport!=="nfl") await ensureRankings();
+    const espnWk = (sport==="nfl" && lg.settings.nflWeekMap && lg.settings.nflWeekMap[wk]) || wk;
+    const url = sport==="nfl"
+      ? `https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?seasontype=1&week=${espnWk}&limit=50`
+      : `https://site.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard?groups=80&year=${seasonYear()}&seasontype=2&week=${wk}&limit=200`;
+    const res = await fetch(url);
     if(!res.ok) return;
     const data = await res.json();
     for(const ev of (data.events||[])){
-      const c = buildCandidateFromEvent(ev);
+      const c = sport==="nfl" ? buildNflCandidateFromEvent(ev) : buildCandidateFromEvent(ev);
       if(!c || (c.fav.n!==teamName && c.dog.n!==teamName)) continue;
       await mutate(draft=>{
         const dl = draft.leagues[code];
@@ -1248,8 +1322,13 @@ async function generateWeekGames(){
   const btn = $("genGamesBtn");
   if(btn){ btn.disabled = true; btn.textContent = "Fetching live matchups…"; }
   try{
-    const year = seasonYear();
-    const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard?groups=80&year=${year}&seasontype=2&week=${wk}&limit=200`);
+    const sport = lg.settings.sport || "cfb";
+    if(sport!=="nfl") await ensureRankings();
+    const espnWk = (sport==="nfl" && lg.settings.nflWeekMap && lg.settings.nflWeekMap[wk]) || wk;
+    const url = sport==="nfl"
+      ? `https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?seasontype=1&week=${espnWk}&limit=50`
+      : `https://site.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard?groups=80&year=${seasonYear()}&seasontype=2&week=${wk}&limit=200`;
+    const res = await fetch(url);
     if(!res.ok) throw new Error("bad response");
     const data = await res.json();
     const events = data.events || [];
@@ -1257,7 +1336,7 @@ async function generateWeekGames(){
     const seenKeys = new Set(existing.map(g=> g.fav.n+"@"+g.dog.n));
     const candidates = [];
     events.forEach(ev=>{
-      const c = buildCandidateFromEvent(ev);
+      const c = sport==="nfl" ? buildNflCandidateFromEvent(ev) : buildCandidateFromEvent(ev);
       if(!c || seenKeys.has(c.key)) return;
       seenKeys.add(c.key);
       candidates.push(c);
@@ -1271,7 +1350,7 @@ async function generateWeekGames(){
     let favCount = 0;
 
     if(mode==="favorites"){
-      const favTeamNames = new Set(lg.members.map(p=> DB.users[p] && DB.users[p].favTeam && DB.users[p].favTeam.n).filter(Boolean));
+      const favTeamNames = new Set(lg.members.map(p=> favTeamNameFor(lg, p)).filter(Boolean));
       const isFavHit = c => favTeamNames.has(c.fav.n) || favTeamNames.has(c.dog.n);
       const favPicks = candidates.filter(isFavHit);
       const restPool = candidates.filter(c=> !isFavHit(c));
@@ -1295,7 +1374,7 @@ async function generateWeekGames(){
       if(slots>0){ shuffleArr(other); chosen = chosen.concat(other.slice(0, slots)); }
     } else if(mode==="conferences"){
       const targetConf = lg.settings.selectedConference || Object.keys(CONFERENCE_GROUPS)[0];
-      const favTeamNames = new Set(lg.members.map(p=> DB.users[p] && DB.users[p].favTeam && DB.users[p].favTeam.n).filter(Boolean));
+      const favTeamNames = new Set(lg.members.map(p=> favTeamNameFor(lg, p)).filter(Boolean));
       const isFavHit = c => favTeamNames.has(c.fav.n) || favTeamNames.has(c.dog.n);
       const inConf = candidates.filter(c=> c.conf===targetConf);
       // A member's favorite team playing in the chosen conference is always guaranteed a spot.
@@ -1507,8 +1586,15 @@ async function syncLiveScores(){
   if(trackable.length===0) return;
   SYNC_IN_FLIGHT = true;
   try{
-    const year = seasonYear();
-    const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard?groups=80&year=${year}&seasontype=2&week=${wk}&limit=200`);
+    const sport = lg.settings.sport || "cfb";
+    // A league's internal week counter doesn't always match ESPN's own week numbering for that
+    // sport (e.g. an NFL test league relabeling ESPN's preseason weeks 2-3 as its own weeks 1-2)
+    // — nflWeekMap lets a league override which real ESPN week to query per internal week.
+    const espnWk = (sport==="nfl" && lg.settings.nflWeekMap && lg.settings.nflWeekMap[wk]) || wk;
+    const url = sport==="nfl"
+      ? `https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?seasontype=1&week=${espnWk}&limit=50`
+      : `https://site.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard?groups=80&year=${seasonYear()}&seasontype=2&week=${wk}&limit=200`;
+    const res = await fetch(url);
     if(!res.ok) return;
     const data = await res.json();
     const byId = {};
@@ -2283,10 +2369,14 @@ function renderLiveTab(){
     };
     const L = side[leftKey], R = side[rightKey];
     const myPick = myPicksNow[g.id]; // highlight whichever side is your own pick, so it's obvious at a glance
+    // Compact "*ABBR -7.5" line-of-the-day: asterisk marks the home team, spread is relative to them.
+    const homeTeam = g.favIsHome===true ? g.fav : g.favIsHome===false ? g.dog : null;
+    const homeLine = g.favIsHome===true ? g.spread : g.favIsHome===false ? -g.spread : null;
+    const lineTxt = (revealed && homeTeam && homeLine!=null) ? `*${teamAbbr(homeTeam)} ${homeLine<0?homeLine:'+'+homeLine}` : null;
     html += `<div class="ticket ${editMode?'commish-edit':''}">
       <div class="ticket-top">
         <span class="kickoff-txt">${esc(fmtKickoff(g.kickoff))}</span>
-        <span class="status-chip ${g.status}">${g.status}${g.status==='live' && g.periodLabel ? ` · ${esc(g.periodLabel)}` : ''}</span>
+        <span style="display:flex;align-items:center;gap:8px">${lineTxt ? `<span class="line-txt">${esc(lineTxt)}</span>` : ''}<span class="status-chip ${g.status}">${g.status}${g.status==='live' && g.periodLabel ? ` · ${esc(g.periodLabel)}` : ''}</span></span>
       </div>
       <div class="matchup">
         <div class="team-side">${teamBadgeHtml(L.team,48)}<div class="team-name${myPick===leftKey?' my-pick':''}">${esc(L.team.n)}${rankTag(L.rank)}</div><div class="team-spread">${L.spreadTxt}</div></div>
