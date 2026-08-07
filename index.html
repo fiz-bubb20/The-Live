@@ -575,6 +575,32 @@ const CONFERENCE_GROUPS = {
 const CONFERENCE_OF = {};
 Object.entries(CONFERENCE_GROUPS).forEach(([conf, teams])=> teams.forEach(t=> CONFERENCE_OF[t]=conf));
 const P4_TEAMS = new Set([...CONFERENCE_GROUPS["ACC"], ...CONFERENCE_GROUPS["Big Ten"], ...CONFERENCE_GROUPS["Big 12"], ...CONFERENCE_GROUPS["SEC"]]);
+// Brand-name programs outside the Power 4 that still carry real relevance/history — used so the
+// random weekly fill reaches for these before ordinary Group of 5 or FCS buy-game matchups.
+const MAJOR_NON_P4 = new Set(["Notre Dame","Army","Navy","Air Force","Boise State","Memphis","Tulane","UNLV","Appalachian State","James Madison"]);
+// Tiers a fill candidate for priority ordering: 0 = both teams P4, 1 = one team P4,
+// 2 = a recognizable non-P4 "major" program, 3 = everything else (the "dog water" tier).
+function candidateFillTier(c){
+  const favP4 = P4_TEAMS.has(c.fav.n), dogP4 = P4_TEAMS.has(c.dog.n);
+  if(favP4 && dogP4) return 0;
+  if(favP4 || dogP4) return 1;
+  if(MAJOR_NON_P4.has(c.fav.n) || MAJOR_NON_P4.has(c.dog.n)) return 2;
+  return 3;
+}
+// Fills slots tier-by-tier (each tier internally still time-slot-balanced via diversifyByTimeSlot)
+// so higher-relevance matchups are always exhausted before falling back to weaker ones.
+function fillByTier(pool, slots, weightFn){
+  const tiers = [[],[],[],[]];
+  pool.forEach(c=> tiers[candidateFillTier(c)].push(c));
+  let picked = [];
+  for(const tier of tiers){
+    if(slots<=0) break;
+    const chunk = diversifyByTimeSlot(tier, weightFn).slice(0, slots);
+    picked = picked.concat(chunk);
+    slots -= chunk.length;
+  }
+  return picked;
+}
 
 // Matches a live ESPN display name (e.g. "Ohio State Buckeyes") back to our curated team entry,
 // preferring the longest curated name contained in it (disambiguates e.g. "Miami" vs "Miami (OH)").
@@ -1357,12 +1383,13 @@ async function generateWeekGames(){
       shuffleArr(favPicks);
       chosen = favPicks.slice(0, slots);
       slots -= chosen.length;
-      // Fill is always random and innately balances across Friday Night / Saturday Noon /
-      // Afternoon / Primetime slots. An optional ranked-game preference skews the odds toward
-      // matches — it never guarantees them, just makes them much more likely.
+      // Fill always exhausts Big Ten/SEC/ACC/Big 12 matchups first, then other recognizable
+      // "major" programs (Notre Dame, service academies, etc.), and only reaches for ordinary
+      // Group of 5 / FCS buy games once those tiers are used up. Still time-slot-balanced and,
+      // within a tier, an optional ranked-game preference skews the odds toward ranked matches.
       if(slots>0){
         const weightFn = rankPrefWeightFn(lg.settings.favoritesRankPref);
-        chosen = chosen.concat(diversifyByTimeSlot(restPool, weightFn).slice(0, slots));
+        chosen = chosen.concat(fillByTier(restPool, slots, weightFn));
       }
       favCount = chosen.filter(isFavHit).length;
     } else if(mode==="top25"){
@@ -1923,16 +1950,18 @@ function latestCompletedWeek(lg){
   const weeks = completedWeeks(lg);
   return weeks.length ? weeks[weeks.length-1] : null;
 }
-function openWeeklyRecap(week){
+async function openWeeklyRecap(week){
   const lg = league();
   if(!lg) return;
   const weeks = completedWeeks(lg);
   if(week==null) week = latestCompletedWeek(lg);
   if(week==null){ showToast("No completed weeks yet — recaps show up once a week's games are all final."); return; }
+  await ensureWeekSuperlatives(week);
+  const lg2 = league();
   const idx = weeks.indexOf(week);
   const prevWeek = idx>0 ? weeks[idx-1] : null;
   const nextWeek = idx>=0 && idx<weeks.length-1 ? weeks[idx+1] : null;
-  const games = (lg.games[week]||[]).slice().sort((a,b)=> new Date(a.kickoff)-new Date(b.kickoff));
+  const games = (lg2.games[week]||[]).slice().sort((a,b)=> new Date(a.kickoff)-new Date(b.kickoff));
   const root = $("modalRoot");
   root.innerHTML = `<div class="modal-backdrop" onclick="if(event.target===this)closeModal()">
     <div class="modal-sheet"><div class="modal-handle"></div>
@@ -1942,8 +1971,8 @@ function openWeeklyRecap(week){
         <button class="icon-btn" style="width:30px;height:30px" onclick="openWeeklyRecap(${nextWeek})" ${nextWeek==null?'disabled':''}>›</button>
       </div>
       <div class="muted" style="margin-bottom:16px">Every game, chronologically, and who covered.</div>
-      ${superlativesHtml(lg, week)}
-      ${games.map(g=>recapGameHtml(lg,g)).join('') || `<div class="empty-hint">No games this week.</div>`}
+      ${weeklySuperlativesHtml(lg2, week)}
+      ${games.map(g=>recapGameHtml(lg2,g)).join('') || `<div class="empty-hint">No games this week.</div>`}
       <button class="btn btn-primary" style="margin-top:4px" onclick="closeModal()">Done</button>
     </div></div>`;
 }
@@ -2002,65 +2031,231 @@ function computeStandings(lg, uptoWeek){
   return rows;
 }
 
-// Crude, just-for-fun awards for a single week (or a whole season if uptoWeek is left off) —
-// purely cosmetic, doesn't touch standings math at all. "Got That Dawg In Him" is just best
-// record; "Biggest Nut Sack" is whoever correctly rode the largest underdog spread that covered.
-// week: a specific week number for that single week's awards, or null for season-wide (every
-// completed week combined) — these are two different asks (recap wants just that week; a
-// season summary wants everything), so this covers both off the same function.
-function computeSuperlatives(lg, week){
-  const weeks = Object.keys(lg.games).map(w=>parseInt(w,10)).filter(w=> week==null || w===week);
-  const finalGames = [];
-  weeks.forEach(wk=> (lg.games[wk]||[]).forEach(g=>{ if(g.status==="final") finalGames.push(g); }));
-  if(!finalGames.length) return null;
-
-  const records = lg.members.map(phone=>{
+/* =========================================================================
+   WEEKLY SUPERLATIVES — crude, single-week awards for the recap. Each category can only be
+   awarded once per season: lg.weeklySuperlatives[week] persists whichever 3 were shown so
+   re-opening a recap always shows the same thing, and future weeks exclude anything already
+   used. Once every category in the pool has been used at least once, the pool resets so a
+   long season can keep cycling instead of running dry.
+   ========================================================================= */
+const WEEKLY_SUPERLATIVE_DEFS = [
+  {key:"broke_clock", emoji:"🍀", name:"Broke Clock"},
+  {key:"cumback", emoji:"🔁", name:"Cumback"},
+  {key:"premature", emoji:"🧻", name:"Premature Ejaculation"},
+  {key:"gas_station", emoji:"💊", name:"Gas Station Boner Pill"},
+  {key:"galaxy_brain", emoji:"🧠", name:"Galaxy Brain"},
+  {key:"smooth_brain", emoji:"🪦", name:"Smooth Brain"},
+  {key:"red_flag", emoji:"🚩", name:"Red Flag"},
+  {key:"circus_clown", emoji:"🤡", name:"Circus Clown"},
+  {key:"should_stay_home", emoji:"🧹", name:"Should've Stayed Home"},
+  {key:"dumpster_fire", emoji:"🧯", name:"Dumpster Fire"},
+  {key:"hottest", emoji:"🔥", name:"Hotter Than a Two-Dollar Pistol"},
+  {key:"public_humiliation", emoji:"🧎", name:"Public Humiliation"},
+  {key:"doggy_style", emoji:"🐕", name:"Doggy Style"},
+  {key:"missionary", emoji:"🥱", name:"Missionary"},
+  {key:"fuck_it_we_ball", emoji:"🧨", name:"Fuck It, We Ball"},
+  {key:"blue_balls", emoji:"😖", name:"Blue Balls"}
+];
+function weekPickBreakdown(lg, week){
+  return (lg.games[week]||[]).filter(g=>g.status==="final").map(g=>({
+    g, cover: computeCover(g),
+    favPhones: pickersFor(lg,g,"fav").map(u=>u.phone),
+    dogPhones: pickersFor(lg,g,"dog").map(u=>u.phone)
+  }));
+}
+function weekRecords(lg, week){
+  const bd = weekPickBreakdown(lg, week);
+  return lg.members.map(phone=>{
     let wins=0, losses=0;
-    finalGames.forEach(g=>{
-      const cover = computeCover(g);
+    bd.forEach(({g,cover})=>{
       if(!cover || cover==="push") return;
-      if(isPausedForGame(lg, phone, g)){ losses++; return; }
       const pick = (lg.picks[phone]||{})[g.id];
       if(!pick) return;
+      if(isPausedForGame(lg, phone, g)){ losses++; return; }
       if(pick===cover) wins++; else losses++;
     });
-    return { phone, name: DB.users[phone]?.name||"Unknown", wins, losses };
-  }).filter(r=> r.wins+r.losses>0);
-  if(!records.length) return null;
+    const total = wins+losses;
+    return { phone, name: DB.users[phone]?.name||"Unknown", wins, losses, total, pct: total?wins/total:null };
+  });
+}
+function priorWeekPct(lg, week, phone){
+  const prevWeeks = completedWeeks(lg).filter(w=>w<week);
+  if(!prevWeeks.length) return null;
+  const r = weekRecords(lg, prevWeeks[prevWeeks.length-1]).find(r=>r.phone===phone);
+  return r && r.total>0 ? r.pct : null;
+}
+// Splits a week's games into an "early" half and the full week by kickoff order, for the
+// hot-start-then-collapse / cold-start-then-recover awards.
+function halfWeekRecords(lg, week){
+  const games = (lg.games[week]||[]).filter(g=>g.status==="final").slice().sort((a,b)=>new Date(a.kickoff)-new Date(b.kickoff));
+  const early = games.slice(0, Math.ceil(games.length/2));
+  function pctFor(list, phone){
+    let wins=0, losses=0;
+    list.forEach(g=>{
+      const cover = computeCover(g); if(!cover||cover==="push") return;
+      const pick = (lg.picks[phone]||{})[g.id]; if(!pick) return;
+      if(isPausedForGame(lg,phone,g)){ losses++; return; }
+      if(pick===cover) wins++; else losses++;
+    });
+    const total = wins+losses;
+    return total? wins/total : null;
+  }
+  return lg.members.map(phone=>({ phone, earlyPct: pctFor(early, phone), fullPct: pctFor(games, phone) }));
+}
+function resolveWeeklySuperlative(key, lg, week){
+  const bd = weekPickBreakdown(lg, week);
+  if(!bd.length) return null;
 
-  const dawgSorted = records.slice().sort((a,b)=> b.wins-a.wins || a.losses-b.losses || a.name.localeCompare(b.name));
-  const dawg = dawgSorted[0];
-
-  let boldest = null;
-  finalGames.forEach(g=>{
-    if(computeCover(g)!=="dog") return; // only dog covers count as "bold" — the underdog actually hit
-    const spreadMag = Math.abs(g.spread);
-    lg.members.forEach(phone=>{
-      if((lg.picks[phone]||{})[g.id]!=="dog") return;
-      if(!boldest || spreadMag>boldest.spreadMag){
-        boldest = { phone, name: DB.users[phone]?.name||"Unknown", spreadMag, fav:g.fav.n, dog:g.dog.n };
+  if(key==="dumpster_fire" || key==="hottest"){
+    const records = weekRecords(lg, week).filter(r=>r.total>0);
+    if(!records.length) return null;
+    const wantLow = key==="dumpster_fire";
+    const sorted = records.slice().sort((a,b)=> wantLow ? (a.pct-b.pct || a.name.localeCompare(b.name)) : (b.pct-a.pct || a.name.localeCompare(b.name)));
+    const top = sorted[0];
+    if(wantLow ? top.pct>=0.5 : top.pct<=0.5) return null;
+    return { phone: top.phone, stat: `${Math.round(top.pct*100)}% this week` };
+  }
+  if(key==="public_humiliation"){
+    const records = weekRecords(lg, week).filter(r=>r.total>0);
+    if(records.length<2) return null;
+    const avg = records.reduce((s,r)=>s+r.pct,0)/records.length;
+    const worst = records.slice().sort((a,b)=>(a.pct-avg)-(b.pct-avg))[0];
+    if(avg-worst.pct < 0.15) return null;
+    return { phone: worst.phone, stat: `${Math.round(worst.pct*100)}% vs ${Math.round(avg*100)}% league average` };
+  }
+  if(key==="doggy_style" || key==="missionary"){
+    const side = key==="doggy_style" ? "dog" : "fav";
+    const tally = {};
+    bd.forEach(({cover,favPhones,dogPhones})=>{
+      if(cover!==side) return;
+      (side==="fav"?favPhones:dogPhones).forEach(p=> tally[p]=(tally[p]||0)+1);
+    });
+    const ranked = Object.entries(tally).sort((a,b)=>b[1]-a[1]);
+    if(!ranked.length || (ranked.length>1 && ranked[1][1]===ranked[0][1])) return null;
+    const [phone,count] = ranked[0];
+    return { phone, stat: `${count} successful ${side==='dog'?'underdog':'favorite'} pick${count===1?'':'s'}` };
+  }
+  if(key==="galaxy_brain" || key==="smooth_brain"){
+    const wantRight = key==="galaxy_brain";
+    let best = null;
+    bd.forEach(({g,cover,favPhones,dogPhones})=>{
+      if(!cover || cover==="push") return;
+      const rightPhones = cover==="fav"?favPhones:dogPhones, wrongPhones = cover==="fav"?dogPhones:favPhones;
+      const total = rightPhones.length+wrongPhones.length;
+      if(total<3) return;
+      const lone = wantRight ? rightPhones : wrongPhones, crowd = wantRight ? wrongPhones : rightPhones;
+      if(lone.length===1 && crowd.length===total-1) best = { phone: lone[0], stat: `${g.fav.n} vs ${g.dog.n}` };
+    });
+    return best;
+  }
+  if(key==="red_flag" || key==="circus_clown" || key==="gas_station"){
+    let best = null;
+    bd.forEach(({g,cover,favPhones,dogPhones})=>{
+      if(!cover || cover==="push") return;
+      const winnerPhones = cover==="fav"?favPhones:dogPhones, loserPhones = cover==="fav"?dogPhones:favPhones;
+      const total = winnerPhones.length+loserPhones.length;
+      if(total<3) return;
+      if(key==="red_flag" && loserPhones.length>0 && loserPhones.length<winnerPhones.length){
+        if(!best || loserPhones.length<best.count) best = { phones:loserPhones, count:loserPhones.length, g };
+      } else if(key==="circus_clown" && loserPhones.length>winnerPhones.length){
+        if(!best || loserPhones.length>best.count) best = { phones:loserPhones, count:loserPhones.length, g };
+      } else if(key==="gas_station" && winnerPhones.length>=2 && winnerPhones.length<loserPhones.length){
+        if(!best || winnerPhones.length<best.count) best = { phones:winnerPhones, count:winnerPhones.length, g };
       }
     });
-  });
-
-  return { dawg, boldest };
+    if(!best) return null;
+    const label = key==="gas_station"
+      ? `${best.count} people covered on ${best.g.fav.n} vs ${best.g.dog.n} anyway`
+      : `${best.g.fav.n} vs ${best.g.dog.n} — ${best.count} took it and lost`;
+    return { phone: best.phones[0], stat: label };
+  }
+  if(key==="should_stay_home"){
+    let best = null;
+    bd.forEach(({g,cover,favPhones,dogPhones})=>{
+      if(!cover || cover==="push" || g.favScore==null || g.dogScore==null || g.spread==null) return;
+      const winnerPhones = cover==="fav"?favPhones:dogPhones, loserPhones = cover==="fav"?dogPhones:favPhones;
+      if(!loserPhones.length || loserPhones.length>=winnerPhones.length) return; // minority pick that lost
+      const margin = Math.abs((g.favScore-g.dogScore) - (-g.spread));
+      if(margin>=14 && (!best || margin>best.margin)) best = { phones:loserPhones, g, margin };
+    });
+    if(!best) return null;
+    return { phone: best.phones[0], stat: `${best.g.fav.n} vs ${best.g.dog.n} — missed by ${Math.round(best.margin)}` };
+  }
+  if(key==="fuck_it_we_ball"){
+    let best = null;
+    bd.forEach(({g,cover,dogPhones})=>{
+      if(cover!=="dog" || !dogPhones.length) return;
+      const mag = Math.abs(g.spread);
+      if(!best || mag>best.mag) best = { phones:dogPhones, mag, g };
+    });
+    if(!best) return null;
+    return { phone: best.phones[0], stat: `+${best.mag} on ${best.g.dog.n}` };
+  }
+  if(key==="blue_balls"){
+    let best = null;
+    bd.forEach(({g,cover})=>{
+      if(!cover || cover==="push" || g.favScore==null || g.dogScore==null || g.spread==null) return;
+      const margin = Math.abs((g.favScore-g.dogScore) - (-g.spread));
+      if(margin!==0.5) return;
+      const missedPhones = pickersFor(lg,g,cover==="fav"?"dog":"fav").map(u=>u.phone);
+      if(missedPhones.length && !best) best = { phones:missedPhones, g };
+    });
+    if(!best) return null;
+    return { phone: best.phones[0], stat: `Missed covering ${best.g.fav.n} vs ${best.g.dog.n} by half a point` };
+  }
+  if(key==="broke_clock"){
+    for(const r of weekRecords(lg, week).filter(r=>r.total>0)){
+      const prev = priorWeekPct(lg, week, r.phone);
+      if(prev!=null && prev<0.5 && r.pct>0.5) return { phone: r.phone, stat: `${Math.round(prev*100)}% → ${Math.round(r.pct*100)}%` };
+    }
+    return null;
+  }
+  if(key==="premature" || key==="cumback"){
+    const halves = halfWeekRecords(lg, week).filter(h=>h.earlyPct!=null && h.fullPct!=null);
+    const hit = key==="premature"
+      ? halves.find(h=> h.earlyPct>=0.7 && h.fullPct<0.5)
+      : halves.find(h=> h.earlyPct<=0.3 && h.fullPct>0.5);
+    return hit ? { phone: hit.phone, stat: `Started ${Math.round(hit.earlyPct*100)}%, finished ${Math.round(hit.fullPct*100)}%` } : null;
+  }
+  return null;
 }
-// Off for now by request (cruder placeholder awards — better ones coming later), but the
-// underlying computeSuperlatives() logic stays intact so this is a one-line flip to bring back.
-const SUPERLATIVES_ENABLED = false;
-function superlativesHtml(lg, uptoWeek){
-  if(!SUPERLATIVES_ENABLED) return "";
-  const s = computeSuperlatives(lg, uptoWeek);
-  if(!s) return "";
-  const cards = [];
-  if(s.dawg && s.dawg.wins>0){
-    cards.push(`<div class="superlative-card"><div class="superlative-emoji">🐕</div><div><div class="superlative-title">Got That Dawg In Him</div><div class="superlative-winner">${esc(s.dawg.name)}</div><div class="superlative-sub">${s.dawg.wins}-${s.dawg.losses}</div></div></div>`);
-  }
-  if(s.boldest){
-    cards.push(`<div class="superlative-card"><div class="superlative-emoji">🥜</div><div><div class="superlative-title">Biggest Nut Sack</div><div class="superlative-winner">${esc(s.boldest.name)}</div><div class="superlative-sub">Rode ${esc(s.boldest.dog)} +${s.boldest.spreadMag} over ${esc(s.boldest.fav)}</div></div></div>`);
-  }
-  if(!cards.length) return "";
-  return `<div class="superlatives-row">${cards.join('')}</div>`;
+// Picks (and permanently locks in) this week's 3 superlatives the first time anyone views the
+// recap for it — after that it's read from storage so it never changes on a re-open.
+async function ensureWeekSuperlatives(week){
+  const code = CURRENT_LEAGUE;
+  let lg = DB.leagues[code];
+  if(lg.weeklySuperlatives && lg.weeklySuperlatives[week]) return lg.weeklySuperlatives[week];
+
+  const priorWeeks = Object.keys(lg.weeklySuperlatives||{}).map(w=>parseInt(w,10)).filter(w=>w<week);
+  let used = new Set();
+  priorWeeks.forEach(w=> (lg.weeklySuperlatives[w]||[]).forEach(a=> used.add(a.key)));
+  if(used.size >= WEEKLY_SUPERLATIVE_DEFS.length) used = new Set(); // full cycle done — start over
+
+  const pool = WEEKLY_SUPERLATIVE_DEFS.filter(d=>!used.has(d.key));
+  const candidates = (pool.length ? pool : WEEKLY_SUPERLATIVE_DEFS).map(def=>{
+    const r = resolveWeeklySuperlative(def.key, lg, week);
+    return r ? {key:def.key, phone:r.phone, stat:r.stat} : null;
+  }).filter(Boolean);
+  shuffleArr(candidates);
+  const chosen = candidates.slice(0,3);
+
+  await mutate(draft=>{
+    const dl = draft.leagues[code];
+    dl.weeklySuperlatives = dl.weeklySuperlatives || {};
+    dl.weeklySuperlatives[week] = chosen;
+  });
+  return DB.leagues[code].weeklySuperlatives[week];
+}
+function weeklySuperlativesHtml(lg, week){
+  const stored = (lg.weeklySuperlatives && lg.weeklySuperlatives[week]) || [];
+  if(!stored.length) return "";
+  const cards = stored.map(a=>{
+    const def = WEEKLY_SUPERLATIVE_DEFS.find(d=>d.key===a.key);
+    if(!def) return "";
+    const name = DB.users[a.phone]?.name || "Unknown";
+    return `<div class="superlative-card"><div class="superlative-emoji">${def.emoji}</div><div><div class="superlative-title">${esc(def.name)}</div><div class="superlative-winner">${esc(name)}</div><div class="superlative-sub">${esc(a.stat)}</div></div></div>`;
+  }).join('');
+  return `<div class="superlatives-row">${cards}</div>`;
 }
 
 /* =========================================================================
@@ -2426,8 +2621,8 @@ function renderBoardTab(){
       </div>
     </div>
   </div>
-  <div class="muted" style="margin-bottom:14px">${viewWeek==null ? 'Season standings through today.' : `Standings through the end of Week ${viewWeek}.`}</div>
-  ${viewWeek==null ? superlativesHtml(lg, null) : ''}`;
+  <div class="muted" style="margin-bottom:14px">${viewWeek==null ? 'Season standings through today.' : `Standings through the end of Week ${viewWeek}.`}</div>`;
+  // Season-long superlatives (the 15-award cascade) aren't wired in here yet — weekly-only for now.
 
   if(rows.length===0){
     html += `<div class="empty-hint">No standings yet.</div>`;
