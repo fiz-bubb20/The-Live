@@ -1934,8 +1934,15 @@ function recapGameHtml(lg, g){
       <div class="recap-score">${score}</div>
       <div class="mini-avatar-row">${avatarsHtml(pickersFor(lg, g, side))}</div>
     </div>`;
+  // Same "*ABBR -7.5" home-team line used on the Scores tab.
+  const homeTeam = g.favIsHome===true ? g.fav : g.favIsHome===false ? g.dog : null;
+  const homeLine = g.favIsHome===true ? g.spread : g.favIsHome===false ? -g.spread : null;
+  const lineTxt = (homeTeam && homeLine!=null) ? `*${teamAbbr(homeTeam)} ${homeLine<0?homeLine:'+'+homeLine}` : null;
   return `<div class="recap-game">
-    <div class="recap-kickoff">${esc(fmtKickoff(g.kickoff))}</div>
+    <div class="recap-kickoff" style="display:flex;justify-content:space-between;align-items:center">
+      <span>${esc(fmtKickoff(g.kickoff))}</span>
+      ${lineTxt ? `<span class="line-txt">${esc(lineTxt)}</span>` : ''}
+    </div>
     <div class="recap-matchup">
       ${teamBlock(g.fav, "fav", g.favScore)}
       ${teamBlock(g.dog, "dog", g.dogScore)}
@@ -2223,26 +2230,31 @@ function resolveWeeklySuperlative(key, lg, week){
 // recap for it — after that it's read from storage so it never changes on a re-open.
 async function ensureWeekSuperlatives(week){
   const code = CURRENT_LEAGUE;
-  let lg = DB.leagues[code];
-  if(lg.weeklySuperlatives && lg.weeklySuperlatives[week]) return lg.weeklySuperlatives[week];
+  if(DB.leagues[code]?.weeklySuperlatives?.[week]) return DB.leagues[code].weeklySuperlatives[week];
 
-  const priorWeeks = Object.keys(lg.weeklySuperlatives||{}).map(w=>parseInt(w,10)).filter(w=>w<week);
-  let used = new Set();
-  priorWeeks.forEach(w=> (lg.weeklySuperlatives[w]||[]).forEach(a=> used.add(a.key)));
-  if(used.size >= WEEKLY_SUPERLATIVE_DEFS.length) used = new Set(); // full cycle done — start over
-
-  const pool = WEEKLY_SUPERLATIVE_DEFS.filter(d=>!used.has(d.key));
-  const candidates = (pool.length ? pool : WEEKLY_SUPERLATIVE_DEFS).map(def=>{
-    const r = resolveWeeklySuperlative(def.key, lg, week);
-    return r ? {key:def.key, phone:r.phone, stat:r.stat} : null;
-  }).filter(Boolean);
-  shuffleArr(candidates);
-  const chosen = candidates.slice(0,3);
-
+  // The whole "what's already used, what's left, pick 3" decision lives INSIDE the transaction
+  // mutator (not computed once beforehand) — this app has background timers writing to the same
+  // shared document every 30s, so reading "already used" outside the transaction and only writing
+  // the result inside it is a real race: a concurrent write can land between the read and the
+  // write and go unnoticed. Deciding inside the mutator means Firestore's automatic retry-on-
+  // conflict re-runs this whole decision against fresh data, closing that gap.
   await mutate(draft=>{
     const dl = draft.leagues[code];
     dl.weeklySuperlatives = dl.weeklySuperlatives || {};
-    dl.weeklySuperlatives[week] = chosen;
+    if(dl.weeklySuperlatives[week]) return; // already decided by an earlier call/retry
+
+    const priorWeeks = Object.keys(dl.weeklySuperlatives).map(w=>parseInt(w,10)).filter(w=>w<week);
+    let used = new Set();
+    priorWeeks.forEach(w=> (dl.weeklySuperlatives[w]||[]).forEach(a=> used.add(a.key)));
+    if(used.size >= WEEKLY_SUPERLATIVE_DEFS.length) used = new Set(); // full cycle done — start over
+
+    const pool = WEEKLY_SUPERLATIVE_DEFS.filter(d=>!used.has(d.key));
+    const candidates = (pool.length ? pool : WEEKLY_SUPERLATIVE_DEFS).map(def=>{
+      const r = resolveWeeklySuperlative(def.key, dl, week);
+      return r ? {key:def.key, phone:r.phone, stat:r.stat} : null;
+    }).filter(Boolean);
+    shuffleArr(candidates);
+    dl.weeklySuperlatives[week] = candidates.slice(0,3);
   });
   return DB.leagues[code].weeklySuperlatives[week];
 }
