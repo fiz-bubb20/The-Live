@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>The Line — Pick'em League</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" type="image/svg+xml" href="icon.svg">
@@ -452,6 +455,28 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script>
 /* =========================================================================
+   SELF-UPDATE CHECK — there's no service worker here, so a phone that already has this
+   page open (or a tab the browser cached) can silently keep running old code indefinitely.
+   Bump APP_VERSION on every deploy-ready change; on load, and again whenever the tab comes
+   back to the foreground, fetch the live file with no caching and compare its APP_VERSION —
+   a mismatch means this tab is stale, so force a real reload (cache-busted URL) rather than
+   letting it keep running outdated logic against a live, shared database.
+   ========================================================================= */
+const APP_VERSION = "v1";
+async function checkForUpdate(){
+  try{
+    const res = await fetch(location.pathname + "?_v=" + Date.now(), {cache:"no-store"});
+    const text = await res.text();
+    const m = text.match(/const APP_VERSION = "([^"]+)"/);
+    if(m && m[1] && m[1]!==APP_VERSION){
+      location.href = location.pathname + "?_r=" + Date.now();
+    }
+  }catch(err){ /* offline or blocked — not worth surfacing, just try again next time */ }
+}
+document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible") checkForUpdate(); });
+checkForUpdate();
+
+/* =========================================================================
    CONFIG — replace with your own Firebase project config (see README.md)
    ========================================================================= */
 const FIREBASE_CONFIG = {
@@ -614,7 +639,7 @@ const TEAM_NAME_QUALIFIERS = ["western","eastern","northern","southern","north",
 // "Florida International" or "Florida A&M") — "state" was the original case; these are the
 // same shape of bug for other real-world FCS "buy game" opponents that share a curated name's
 // first word(s) but aren't themselves curated (since they're not FBS).
-const TEAM_NAME_SUFFIX_REJECT = ["state","a&t","a&m","international"];
+const TEAM_NAME_SUFFIX_REJECT = ["state","a&t","a&m","international","tech"];
 function matchLiveTeam(espnDisplayName){
   if(!espnDisplayName) return null;
   const lower = stripDiacritics(espnDisplayName.toLowerCase());
@@ -825,6 +850,22 @@ function setAuthMode(mode){
 function onTeamTyped(){
   const t = findTeam($("suTeam").value);
   $("suTeamBadge").innerHTML = t ? teamBadgeHtml(t, 26) : "";
+}
+function onMyFavTeamTyped(){
+  const t = findTeam($("myFavTeam").value);
+  $("favTeamBadge").innerHTML = t ? teamBadgeHtml(t, 26) : "";
+}
+async function saveMyFavTeam(){
+  const name = $("myFavTeam").value.trim();
+  const err = $("favTeamError");
+  err.textContent = "";
+  if(!name) return err.textContent = "Enter a team.";
+  const team = findTeam(name);
+  await mutate(draft=>{
+    draft.users[SESSION_PHONE].favTeam = team ? {n:team.n, l:team.l, c:team.c} : {n:name, l:null, c:null};
+  });
+  showToast("Favorite team updated.");
+  openSettings();
 }
 
 async function doSignUp(){
@@ -2815,6 +2856,18 @@ function renderSettingsModal(){
       <div class="settings-section">
         <h4>Invite Friends</h4>
         <div class="code-display"><span class="code">${lg.code}</span><button class="btn btn-ghost btn-sm" onclick="navigator.clipboard.writeText('${lg.code}');showToast('Code copied')">Copy</button></div>
+      </div>
+
+      <div class="settings-section">
+        <h4>Your Favorite Team</h4>
+        <div class="field" style="margin-bottom:8px">
+          <div class="team-picker-row">
+            <div id="favTeamBadge">${u?.favTeam ? teamBadgeHtml(u.favTeam, 26) : ""}</div>
+            <input id="myFavTeam" type="text" list="teamsList" placeholder="Start typing your team…" autocomplete="off" value="${esc(u?.favTeam?.n||"")}" oninput="onMyFavTeamTyped()">
+          </div>
+        </div>
+        <div class="error-msg" id="favTeamError"></div>
+        <button class="btn btn-outline-accent btn-sm" onclick="saveMyFavTeam()">Save</button>
       </div>
 
       ${commish && COMMISH_MODE ? `<div class="settings-section">
