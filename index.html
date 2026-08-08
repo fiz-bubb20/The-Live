@@ -462,7 +462,7 @@
    a mismatch means this tab is stale, so force a real reload (cache-busted URL) rather than
    letting it keep running outdated logic against a live, shared database.
    ========================================================================= */
-const APP_VERSION = "v2";
+const APP_VERSION = "v3";
 async function checkForUpdate(){
   try{
     const res = await fetch(location.pathname + "?_v=" + Date.now(), {cache:"no-store"});
@@ -961,15 +961,19 @@ async function joinLeague(){
   if(!lg){ err.textContent = "No league found with that code."; return; }
   const phone = SESSION_PHONE;
   if(lg.members.includes(phone)){ closeModal(); enterLeague(code); return; }
-  if((lg.pendingMembers||[]).includes(phone)){ err.textContent = "You've already requested to join — waiting on the commissioner."; return; }
+  // The code itself is the gate — anyone who has it joins immediately, no commissioner
+  // approval step. (Requests/accept/decline still exist for anyone left over from before this
+  // changed, but nothing new ever lands in pendingMembers anymore.)
   await mutate(draft=>{
     const dl = draft.leagues[code];
-    dl.pendingMembers = dl.pendingMembers || [];
-    dl.pendingMembers.push(phone);
+    if(!dl.members.includes(phone)) dl.members.push(phone);
+    draft.users[phone].leagues = draft.users[phone].leagues || [];
+    if(!draft.users[phone].leagues.includes(code)) draft.users[phone].leagues.push(code);
   });
   closeModal();
-  showToast(`Request sent to join "${lg.name}" — waiting for the commissioner to accept you.`);
-  renderRoot();
+  showToast(`Joined "${lg.name}".`);
+  await maybeAddNewMemberFavoriteGame(code, phone);
+  enterLeague(code);
 }
 async function acceptJoinRequest(code, phone){
   await mutate(draft=>{
