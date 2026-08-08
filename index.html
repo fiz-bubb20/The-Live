@@ -462,7 +462,7 @@
    a mismatch means this tab is stale, so force a real reload (cache-busted URL) rather than
    letting it keep running outdated logic against a live, shared database.
    ========================================================================= */
-const APP_VERSION = "v1";
+const APP_VERSION = "v2";
 async function checkForUpdate(){
   try{
     const res = await fetch(location.pathname + "?_v=" + Date.now(), {cache:"no-store"});
@@ -627,46 +627,13 @@ function fillByTier(pool, slots, weightFn){
   return picked;
 }
 
-// Matches a live ESPN display name (e.g. "Ohio State Buckeyes") back to our curated team entry,
-// preferring the longest curated name contained in it (disambiguates e.g. "Miami" vs "Miami (OH)").
-function stripDiacritics(s){ return s.normalize("NFD").replace(/[̀-ͯ]/g,""); }
-// Requires whole-word boundaries (space or string edge) on both sides of the match, so a
-// different school that merely starts with the same word (e.g. "Arkansas-Pine Bluff" vs
-// our curated "Arkansas") is correctly rejected instead of misattributed.
-const TEAM_NAME_QUALIFIERS = ["western","eastern","northern","southern","north","south","east","west","central","northeast","northeastern","southeast","southeastern","northwest","northwestern","southwest","southwestern"];
-// Suffix modifiers that turn a curated name into a different school entirely (e.g. curated
-// "North Carolina" must not match "North Carolina A&T", curated "Florida" must not match
-// "Florida International" or "Florida A&M") — "state" was the original case; these are the
-// same shape of bug for other real-world FCS "buy game" opponents that share a curated name's
-// first word(s) but aren't themselves curated (since they're not FBS).
-const TEAM_NAME_SUFFIX_REJECT = ["state","a&t","a&m","international","tech"];
-function matchLiveTeam(espnDisplayName){
-  if(!espnDisplayName) return null;
-  const lower = stripDiacritics(espnDisplayName.toLowerCase());
-  let best = null;
-  for(const t of TEAMS){
-    const needle = stripDiacritics(t.n.toLowerCase());
-    const idx = lower.indexOf(needle);
-    if(idx===-1) continue;
-    const before = idx===0 ? " " : lower[idx-1];
-    const afterIdx = idx+needle.length;
-    const after = afterIdx>=lower.length ? " " : lower[afterIdx];
-    if(before!==" " || after!==" ") continue;
-    // Reject curated "Illinois" matching inside "Western Illinois ..." (a different school)
-    // unless the curated entry itself already starts with that qualifier (e.g. "Western Michigan").
-    if(idx>0){
-      const prevWord = lower.slice(0, idx).trimEnd().split(/\s+/).pop();
-      if(TEAM_NAME_QUALIFIERS.includes(prevWord) && !needle.startsWith(prevWord+" ")) continue;
-    }
-    // Reject curated "North Carolina" matching "North Carolina A&T ..." (a different school),
-    // curated "Illinois" matching "Illinois State ..." etc — unless the curated entry itself IS
-    // that longer school (like "Ohio State" or "Texas A&M"), which self-matches fine.
-    const afterWord = lower.slice(afterIdx).trimStart().split(/\s+/)[0];
-    if(TEAM_NAME_SUFFIX_REJECT.includes(afterWord) && !needle.endsWith(afterWord)) continue;
-    if(!best || t.n.length > best.n.length) best = t;
-  }
-  return best;
-}
+// ESPN's own team objects carry a "location" field that's the exact school name with no mascot
+// (e.g. {location:"Ohio State", name:"Buckeyes"} for "Ohio State Buckeyes"; {location:"North
+// Carolina A&T", name:"Aggies"} for "North Carolina A&T Aggies") — matching against that exactly
+// via findTeam() is both simpler and strictly correct, unlike substring-matching the combined
+// display name, which kept misattributing real different schools that merely start with a
+// curated name's words (North Carolina A&T as "North Carolina", Florida International as
+// "Florida", Utah Tech as "Utah", Southeast Missouri State as "Missouri State", etc.).
 function shuffleArr(arr){
   for(let i=arr.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [arr[i],arr[j]]=[arr[j],arr[i]]; }
   return arr;
@@ -1241,7 +1208,7 @@ async function ensureRankings(){
     const data = await res.json();
     const poll = data.rankings && data.rankings.find(p=> /playoff|ap top|coaches/i.test(p.name||"")) || (data.rankings && data.rankings[0]);
     (poll && poll.ranks || []).forEach(r=>{
-      const t = findTeam(r.team.location) || matchLiveTeam(`${r.team.location} ${r.team.name}`);
+      const t = findTeam(r.team.location);
       if(t && !(t.n in RANK_BY_TEAM)) RANK_BY_TEAM[t.n] = r.current;
     });
   }catch(err){ console.error("rankings fetch failed", err); }
@@ -1258,14 +1225,18 @@ function buildCandidateFromEvent(ev){
   const homeIsFav = hasOdds ? !!(odds.homeTeamOdds && odds.homeTeamOdds.favorite) : true; // no line yet: home shown as placeholder favorite
   const favC = homeIsFav ? home : away;
   const dogC = homeIsFav ? away : home;
-  const favTeam = matchLiveTeam(favC.team.displayName);
-  const dogTeam = matchLiveTeam(dogC.team.displayName);
-  const favEntry = favTeam ? {n:favTeam.n,l:favTeam.l,c:favTeam.c} : {n:favC.team.displayName,l:(favC.team.logo||null),c:null};
-  const dogEntry = dogTeam ? {n:dogTeam.n,l:dogTeam.l,c:dogTeam.c} : {n:dogC.team.displayName,l:(dogC.team.logo||null),c:null};
+  const favTeam = findTeam(favC.team.location);
+  const dogTeam = findTeam(dogC.team.location);
+  const favEntry = favTeam ? {n:favTeam.n,l:favTeam.l,c:favTeam.c} : {n:favC.team.location,l:(favC.team.logo||null),c:null};
+  const dogEntry = dogTeam ? {n:dogTeam.n,l:dogTeam.l,c:dogTeam.c} : {n:dogC.team.location,l:(dogC.team.logo||null),c:null};
   const kickoff = new Date(comp.date).toISOString();
+  // ESPN's own embedded curatedRank.current comes back as 99 (a truthy "unranked" sentinel, not
+  // null/undefined) whenever the real poll hasn't been attached to the scoreboard feed yet — which
+  // is most of the time this early — so it must be sanity-checked as an actual top-25 value before
+  // trusting it over the real, separately-fetched poll in RANK_BY_TEAM.
   const rankByTeam = RANK_BY_TEAM || {};
-  const favRank = (favC.curatedRank && favC.curatedRank.current) || (favTeam && rankByTeam[favTeam.n]) || 99;
-  const dogRank = (dogC.curatedRank && dogC.curatedRank.current) || (dogTeam && rankByTeam[dogTeam.n]) || 99;
+  const favRank = (favTeam && rankByTeam[favTeam.n]) || (favC.curatedRank && favC.curatedRank.current<=25 && favC.curatedRank.current) || 99;
+  const dogRank = (dogTeam && rankByTeam[dogTeam.n]) || (dogC.curatedRank && dogC.curatedRank.current<=25 && dogC.curatedRank.current) || 99;
   // No real line posted yet (common for games more than a week or two out) — make one up rather
   // than leaving picks stuck on "TBD". Skews toward small-to-medium spreads, since blowout lines
   // are rarer than close ones; a real line just overwrites this the next time games are topped up.
@@ -1338,9 +1309,11 @@ async function maybeAddNewMemberFavoriteGame(code, phone){
     const res = await fetch(url);
     if(!res.ok) return;
     const data = await res.json();
+    const excluded = new Set((lg.excludedGames && lg.excludedGames[wk]) || []);
     for(const ev of (data.events||[])){
+      if(excluded.has(ev.id)) continue; // commissioner deleted this one — never auto-add it back
       const c = sport==="nfl" ? buildNflCandidateFromEvent(ev) : buildCandidateFromEvent(ev);
-      if(!c || (c.fav.n!==teamName && c.dog.n!==teamName)) continue;
+      if(!c || (c.fav.n!==teamName && c.dog.n!==teamName) || excluded.has(c.key)) continue;
       await mutate(draft=>{
         const dl = draft.leagues[code];
         dl.games[wk] = dl.games[wk] || [];
@@ -1401,10 +1374,12 @@ async function generateWeekGames(){
     const events = data.events || [];
 
     const seenKeys = new Set(existing.map(g=> g.fav.n+"@"+g.dog.n));
+    const excluded = new Set((lg.excludedGames && lg.excludedGames[wk]) || []);
     const candidates = [];
     events.forEach(ev=>{
+      if(excluded.has(ev.id)) return; // commissioner deleted this one — never auto-add it back
       const c = sport==="nfl" ? buildNflCandidateFromEvent(ev) : buildCandidateFromEvent(ev);
-      if(!c || seenKeys.has(c.key)) return;
+      if(!c || seenKeys.has(c.key) || excluded.has(c.key)) return;
       seenKeys.add(c.key);
       candidates.push(c);
     });
@@ -1871,7 +1846,17 @@ async function deleteGame(gameId){
   const autoMode = (lg.settings.pickMode||"manual") !== "manual";
   await mutate(draft=>{
     const dl = draft.leagues[CURRENT_LEAGUE];
+    const deleted = (dl.games[wk]||[]).find(x=>x.id===gameId);
     dl.games[wk] = (dl.games[wk]||[]).filter(x=>x.id!==gameId);
+    // Remember what got deleted (by ESPN event id, or by matchup key for manually-added games
+    // with no espnId) so auto-fill never brings it right back — even if it's a favorite-team
+    // matchup that would otherwise get guaranteed priority.
+    if(deleted){
+      dl.excludedGames = dl.excludedGames || {};
+      dl.excludedGames[wk] = dl.excludedGames[wk] || [];
+      const exKey = deleted.espnId || (deleted.fav.n+"@"+deleted.dog.n);
+      if(!dl.excludedGames[wk].includes(exKey)) dl.excludedGames[wk].push(exKey);
+    }
   });
   render();
   const remaining = (league().games[wk]||[]).length;
